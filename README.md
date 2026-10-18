@@ -90,7 +90,8 @@ docker compose exec monitor homelab-monitor test-alert
 ```
 
 Every phone or browser signed in with your key can pair and enable
-notifications the same way, each with its own channels.
+notifications the same way, each with its own channels: on another phone, tap
+*I have a key* and enter the secret key from the app's Settings.
 
 ### 5. Optional extras
 
@@ -100,6 +101,11 @@ notifications the same way, each with its own channels.
   stop or no relay is connected: point another monitor (or Glance, or an uptime
   service) at it to know if this one stops.
 - **Scheduled jobs:** see [Heartbeats](#heartbeats).
+- **Share it:** to get the alerts of a monitor with your own key, ask its
+  owner to add your npub, `owner: [npub1..., npub1...]` (up to 3), and
+  restart it. Then pair with its npub like above. You choose your channels,
+  they choose theirs, and taking you out of the list stops everything new
+  for you.
 - **Keep `data/` in your backups.** Lose it and you'll pair again and re-enable
   notifications.
 
@@ -188,7 +194,7 @@ every token, delete `data/heartbeat.key` and restart the monitor.
 
 - The monitor has its own Nostr key, created on first run in `data/`. Your npub
   is its `owner`: it encrypts everything for you (NIP-44) and only reads
-  settings you wrote.
+  settings you wrote. With several owners, it writes a copy for each.
 - The app holds your key, and pairs with a monitor by its npub.
 - When you enable notifications, the app gives the monitor this phone's push
   subscription (encrypted) and the channels you want. Alerts are sent with Web
@@ -199,13 +205,13 @@ every token, delete `data/heartbeat.key` and restart the monitor.
   default relays; set `relays` in the config (and in the app's settings) to
   use others.
 
-Data on the relays, under the `homelab-monitor` topic (M = monitor, U = you):
+Data on the relays, under the `homelab-monitor` topic (M = monitor, U = you, an owner):
 
 | Key | Written by | Contents |
 | --- | --- | --- |
-| `:M.config` | monitor | name, channels, checks, Web Push public key |
-| `:M.status` | monitor | state of every check, heartbeat |
-| `:M.alerts-YYYY-MM` | monitor | the month's alerts (CRDT map) |
+| `:M.config-U` | monitor | name, channels, checks, Web Push public key |
+| `:M.status-U` | monitor | state of every check, heartbeat |
+| `:M.alerts-YYYY-MM-U` | monitor | the month's alerts (CRDT map) |
 | `:U.devices-M` | you | each device's push subscription and channels (CRDT map) |
 | `:U.monitors` | you | the monitors you paired, synced between your devices |
 

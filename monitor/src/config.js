@@ -11,12 +11,32 @@ const slug = (text) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-function parseOwner(owner) {
-  const hex = owner?.startsWith("npub1") ? npubDecode(owner) : owner;
-  if (!/^[0-9a-f]{64}$/.test(hex || "")) {
-    throw new Error("config: `owner` must be your npub (or hex public key)");
+// Every owner gets their own encrypted copy of everything the monitor writes
+export const MAX_OWNERS = 3;
+
+function parseOwners(owner) {
+  const list = Array.isArray(owner) ? owner : [owner];
+  const owners = [
+    ...new Set(
+      list.map((entry) => {
+        const text = String(entry ?? "").trim();
+        let hex = text;
+        try {
+          if (text.startsWith("npub1")) hex = npubDecode(text);
+        } catch {
+          // Reported below
+        }
+        if (!/^[0-9a-f]{64}$/.test(hex)) {
+          throw new Error(`config: \`owner\` must be your npub (or hex public key), not "${text}"`);
+        }
+        return hex;
+      })
+    ),
+  ];
+  if (owners.length > MAX_OWNERS) {
+    throw new Error(`config: \`owner\` can list up to ${MAX_OWNERS} npubs`);
   }
-  return hex;
+  return owners;
 }
 
 /**
@@ -90,7 +110,7 @@ export function loadConfig(path) {
 
   return {
     name: raw.name || "Homelab",
-    owner: parseOwner(raw.owner),
+    owners: parseOwners(raw.owner),
     relays: raw.relays || DEFAULT_RELAYS,
     vapidSubject: raw.vapidSubject || "mailto:monitor@homelab.local",
     // Where the app is hosted, for pairing links

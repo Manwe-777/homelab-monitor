@@ -1,9 +1,9 @@
-import { ToolDb, MapCrdt } from "tool-db";
+import { ToolDb, MapCrdt, npubEncode } from "tool-db";
 import webpush from "web-push";
 import {
   TOPIC,
-  CONFIG_KEY,
-  STATUS_KEY,
+  configKey,
+  statusKey,
   alertsKey,
   devicesKey,
   namespaced,
@@ -24,9 +24,9 @@ const timestamp = () => new Date().toISOString().replace("T", " ").slice(0, 19);
 const defaultLog = (...args) => console.log(timestamp(), ...args);
 
 /**
- * Runs the checks of a config, and reports to the owner through tool-db:
- * config, status and alert history (encrypted for the owner), and Web Push
- * notifications to the owner's devices.
+ * Runs the checks of a config, and reports to its owners through tool-db:
+ * config, status and alert history (a copy encrypted for each owner), and
+ * Web Push notifications to the owners' devices.
  */
 export class Monitor {
   /**
@@ -60,6 +60,7 @@ export class Monitor {
     }
 
     this.states = {};
+    // { [owner]: { [deviceId]: Device } }
     this.devices = {};
     this.deadEndpoints = new Set();
     this.alertMaps = {};
@@ -70,8 +71,8 @@ export class Monitor {
     return this.identity.pubkey;
   }
 
-  get owner() {
-    return this.config.owner;
+  get owners() {
+    return this.config.owners;
   }
 
   get signer() {
@@ -102,6 +103,7 @@ export class Monitor {
 
     await this.publishConfig();
     await this.loadDevices();
+    await this.syncAlerts(monthOf(Date.now()));
   }
 
   /**
@@ -124,6 +126,8 @@ export class Monitor {
       }
     }
 
+    // Right away too, for an owner who was just added
+    this.scheduleStatus();
     this.timers.push(setInterval(() => this.publishStatus(), this.config.heartbeatMs));
     this.timers.push(setInterval(() => this.history.save(), 60000));
     this.log(`Monitoring ${this.checkCount()} checks in ${this.config.channels.length} channels`);
@@ -198,7 +202,19 @@ export class Monitor {
       vapidPublicKey: this.identity.vapid.publicKey,
       updatedAt: Date.now(),
     };
-    await this.db.putData(CONFIG_KEY, await encryptJson(this.signer, this.owner, config), true);
+    await this.putForOwners(configKey, config);
+  }
+
+  /**
+   * Writes a value once per owner, each copy encrypted for them
+   * @param key owner => key
+   */
+  async putForOwners(key, value) {
+    await Promise.all(
+      this.owners.map(async (owner) =>
+        this.db.putData(key(owner), await encryptJson(this.signer, owner, value), true)
+      )
+    );
   }
 
   /**
@@ -206,8 +222,12 @@ export class Monitor {
    * again for something that was already down
    */
   async loadPreviousStatus() {
-    const payload = await this.db.getData(STATUS_KEY, true, 3000).catch(() => null);
-    const previous = await decryptJson(this.signer, this.owner, payload);
+    let previous = null;
+    for (const owner of this.owners) {
+      const payload = await this.db.getData(statusKey(owner), true, 3000).catch(() => null);
+      previous = await decryptJson(this.signer, owner, payload);
+      if (previous) break;
+    }
 
     for (const channel of this.config.channels) {
       for (const check of channel.checks) {
@@ -298,18 +318,18 @@ export class Monitor {
       checks[ref] = state;
     }
 
-    const deadDevices = Object.entries(this.devices)
-      .filter(([, device]) => this.deadEndpoints.has(device.subscription?.endpoint))
-      .map(([id]) => id);
-
-    const status = {
-      checks,
-      heartbeatAt: Date.now(),
-      heartbeatMs: this.config.heartbeatMs,
-      deadDevices,
-    };
+    const heartbeatAt = Date.now();
     try {
-      await this.db.putData(STATUS_KEY, await encryptJson(this.signer, this.owner, status), true);
+      await Promise.all(
+        this.owners.map(async (owner) => {
+          // Each owner sees which of their devices lost their subscription
+          const deadDevices = Object.entries(this.devices[owner] || {})
+            .filter(([, device]) => this.deadEndpoints.has(device.subscription?.endpoint))
+            .map(([id]) => id);
+          const status = { checks, heartbeatAt, heartbeatMs: this.config.heartbeatMs, deadDevices };
+          await this.db.putData(statusKey(owner), await encryptJson(this.signer, owner, status), true);
+        })
+      );
     } catch (err) {
       this.log("Could not publish status:", err.message);
     }
@@ -342,15 +362,58 @@ export class Monitor {
 
   async recordAlert(alert) {
     const month = monthOf(alert.ts);
-    if (!this.alertMaps[month]) {
-      const map = new MapCrdt(this.pubkey);
-      await this.db.getCrdt(alertsKey(month), map, true);
-      this.alertMaps[month] = map;
-    }
+    await Promise.all(this.owners.map((owner) => this.addAlerts(owner, month, [alert])));
+  }
 
-    const map = this.alertMaps[month];
-    map.SET(alert.id, await encryptJson(this.signer, this.owner, alert));
-    await this.db.putCrdt(alertsKey(month), map, true);
+  /**
+   * An owner's alert history for a month, loaded once
+   */
+  async alertMap(owner, month) {
+    const key = alertsKey(month, owner);
+    if (!this.alertMaps[key]) {
+      const map = new MapCrdt(this.pubkey);
+      await this.db.getCrdt(key, map, true).catch(() => null);
+      this.alertMaps[key] = map;
+    }
+    return this.alertMaps[key];
+  }
+
+  async addAlerts(owner, month, alerts) {
+    const map = await this.alertMap(owner, month);
+    for (const alert of alerts) {
+      map.SET(alert.id, await encryptJson(this.signer, owner, alert));
+    }
+    await this.db.putCrdt(alertsKey(month, owner), map, true);
+  }
+
+  /**
+   * Gives every owner the month's alerts that any other owner has, so an
+   * owner added to the config gets the history so far
+   */
+  async syncAlerts(month) {
+    try {
+      const known = {};
+      for (const owner of this.owners) {
+        known[owner] = await decryptMap(this.signer, owner, (await this.alertMap(owner, month)).value);
+      }
+      // The month's history from when it was kept in a single copy
+      const single = new MapCrdt(this.pubkey);
+      await this.db.getCrdt(`alerts-${month}`, single, true).catch(() => null);
+
+      const all = {};
+      for (const owner of this.owners) {
+        Object.assign(all, await decryptMap(this.signer, owner, single.value), known[owner]);
+      }
+      for (const owner of this.owners) {
+        const missing = Object.values(all).filter((alert) => !known[owner][alert.id]);
+        if (missing.length) {
+          await this.addAlerts(owner, month, missing);
+          this.log(`Copied ${missing.length} alert(s) to the history of ${npubEncode(owner).slice(0, 16)}…`);
+        }
+      }
+    } catch (err) {
+      this.log("Could not copy the alert history:", err.message);
+    }
   }
 
   async pushAlert(channel, alert) {
@@ -361,7 +424,7 @@ export class Monitor {
       ...alert,
     });
 
-    const targets = Object.entries(this.devices).filter(
+    const targets = Object.values(this.devices).flatMap(Object.entries).filter(
       ([, device]) =>
         deviceWantsChannel(device, channel.id) &&
         !this.deadEndpoints.has(device.subscription.endpoint)
@@ -403,28 +466,31 @@ export class Monitor {
   }
 
   /**
-   * Devices are written by the owner, in their namespace
+   * Devices are written by each owner, in their namespace
    */
-  get devicesFinalKey() {
-    return namespaced(this.owner, devicesKey(this.pubkey));
-  }
-
   async loadDevices() {
-    const map = new MapCrdt(this.pubkey);
-    await this.db.getCrdt(this.devicesFinalKey, map, false).catch(() => null);
-    await this.setDevices(map.value);
+    await Promise.all(
+      this.owners.map(async (owner) => {
+        const key = namespaced(owner, devicesKey(this.pubkey));
+        const map = new MapCrdt(this.pubkey);
+        await this.db.getCrdt(key, map, false).catch(() => null);
+        await this.setDevices(owner, map.value);
 
-    this.db.subscribeData(this.devicesFinalKey);
-    this.db.addKeyListener(this.devicesFinalKey, (msg) => {
-      if (msg.c === "MAP" && Array.isArray(msg.v)) {
-        this.setDevices(new MapCrdt("", msg.v).value);
-      }
-    });
+        this.db.subscribeData(key);
+        this.db.addKeyListener(key, (msg) => {
+          if (msg.c === "MAP" && Array.isArray(msg.v)) {
+            this.setDevices(owner, new MapCrdt("", msg.v).value);
+          }
+        });
+      })
+    );
   }
 
-  async setDevices(encrypted) {
-    this.devices = await decryptMap(this.signer, this.owner, encrypted);
-    const enabled = Object.values(this.devices).filter((device) => device.subscription);
+  async setDevices(owner, encrypted) {
+    this.devices[owner] = await decryptMap(this.signer, owner, encrypted);
+    const enabled = Object.values(this.devices)
+      .flatMap(Object.values)
+      .filter((device) => device.subscription);
     this.log(`${enabled.length} device(s) with notifications enabled`);
   }
 }

@@ -67,3 +67,13 @@ test("heartbeats need the status page, which is on unless turned off", () => {
   assert.equal(config.channels[0].checks[0].everyMs, 86400000);
   assert.throws(() => configFrom(`owner: ${owner}\nstatusPage: false\n${heartbeat}`), /status page/);
 });
+
+test("owner takes one npub or a list, up to 3", () => {
+  const others = [1, 2, 3].map(() => npubEncode(getPublicKey(generateSecretKey())));
+  const channels = "channels: [{ name: a }]";
+  assert.equal(configFrom(`owner: ${owner}\n${channels}`).owners.length, 1);
+  const two = configFrom(`owner: [${owner}, ${others[0]}, ${owner}]\n${channels}`);
+  assert.deepEqual(two.owners.length, 2);
+  assert.throws(() => configFrom(`owner: [${owner}, ${others.join(", ")}]\n${channels}`), /up to 3/);
+  assert.throws(() => configFrom(`owner: [${owner}, nope]\n${channels}`), /"nope"/);
+});

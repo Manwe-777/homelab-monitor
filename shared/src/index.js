@@ -1,12 +1,13 @@
 /**
  * Data model shared by the monitor and the app, all under the TOPIC topic.
- * M is the monitor's public key, U the owner's (yours). Every value is
- * encrypted with NIP-44 between M and U, readable only by both of them.
+ * M is the monitor's public key, U an owner's (yours). Every value is
+ * encrypted with NIP-44 between M and U, readable only by both of them, so
+ * the monitor writes a copy of its values for each owner.
  *
- *   :M.config            MonitorConfig, written by the monitor
- *   :M.status            MonitorStatus, written by the monitor
- *   :M.alerts-YYYY-MM    MapCRDT of the month's alerts, { [alertId]: encrypted Alert }
- *   :U.devices-M         MapCRDT of the owner's devices, { [deviceId]: encrypted Device }
+ *   :M.config-U            MonitorConfig, written by the monitor
+ *   :M.status-U            MonitorStatus, written by the monitor
+ *   :M.alerts-YYYY-MM-U    MapCRDT of the month's alerts, { [alertId]: encrypted Alert }
+ *   :U.devices-M           MapCRDT of the owner's devices, { [deviceId]: encrypted Device }
  *
  * @typedef {{ id: string, name: string, type: string, target: string }} CheckInfo
  * @typedef {{ id: string, name: string, checks: CheckInfo[] }} ChannelInfo
@@ -27,9 +28,9 @@ export const DEFAULT_RELAYS = [
 ];
 
 // Keys, relative to the writer's namespace
-export const CONFIG_KEY = "config";
-export const STATUS_KEY = "status";
-export const alertsKey = (month) => `alerts-${month}`;
+export const configKey = (ownerPubkey) => `config-${ownerPubkey}`;
+export const statusKey = (ownerPubkey) => `status-${ownerPubkey}`;
+export const alertsKey = (month, ownerPubkey) => `alerts-${month}-${ownerPubkey}`;
 export const devicesKey = (monitorPubkey) => `devices-${monitorPubkey}`;
 
 /**

@@ -2,8 +2,8 @@ import { ToolDb, MapCrdt } from "tool-db";
 import { ToolDbIndexedDb } from "@tool-db/indexeddb-store";
 import {
   TOPIC,
-  CONFIG_KEY,
-  STATUS_KEY,
+  configKey,
+  statusKey,
   alertsKey,
   devicesKey,
   namespaced,
@@ -58,21 +58,23 @@ export async function saveMonitors(db, monitors) {
 
 /**
  * A value the monitor wrote for us, decrypted (config or status)
+ * @param key configKey or statusKey, the monitor writes a copy for each owner
  */
 export async function readMonitorValue(db, monitor, key) {
-  const payload = await db.getData(namespaced(monitor, key));
+  const payload = await db.getData(namespaced(monitor, key(me(db))));
   return decryptJson(db.userAccount, monitor, payload);
 }
 
-export const readConfig = (db, monitor) => readMonitorValue(db, monitor, CONFIG_KEY);
-export const readStatus = (db, monitor) => readMonitorValue(db, monitor, STATUS_KEY);
+export const readConfig = (db, monitor) => readMonitorValue(db, monitor, configKey);
+export const readStatus = (db, monitor) => readMonitorValue(db, monitor, statusKey);
 
 /**
  * Calls back with each new decrypted value of a monitor's key
+ * @param key configKey or statusKey
  * @returns unsubscribe
  */
 export function watchMonitorValue(db, monitor, key, callback) {
-  const finalKey = namespaced(monitor, key);
+  const finalKey = namespaced(monitor, key(me(db)));
   db.subscribeData(finalKey);
   const id = db.addKeyListener(finalKey, async (msg) => {
     const value = await decryptJson(db.userAccount, monitor, msg.v);
@@ -86,7 +88,7 @@ export function watchMonitorValue(db, monitor, key, callback) {
  */
 export async function loadAlerts(db, monitor, month) {
   const map = new MapCrdt(me(db));
-  await db.getCrdt(namespaced(monitor, alertsKey(month)), map);
+  await db.getCrdt(namespaced(monitor, alertsKey(month, me(db))), map);
   const alerts = await decryptMap(db.userAccount, monitor, map.value);
   return Object.values(alerts).sort((a, b) => b.ts - a.ts);
 }
@@ -96,7 +98,7 @@ export async function loadAlerts(db, monitor, month) {
  * @returns unsubscribe
  */
 export function watchAlerts(db, monitor, month, callback) {
-  const finalKey = namespaced(monitor, alertsKey(month));
+  const finalKey = namespaced(monitor, alertsKey(month, me(db)));
   db.subscribeData(finalKey);
   const id = db.addKeyListener(finalKey, callback);
   return () => db.removeKeyListener(id);

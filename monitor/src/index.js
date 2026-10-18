@@ -53,7 +53,8 @@ switch (command) {
     console.log(`Or open:      ${link.href}
 Or paste:     ${npub}
 
-The app must be signed in with the owner's key: ${npubEncode(config.owner)}`);
+The app must be signed in with an owner's key:
+${config.owners.map((owner) => `              ${npubEncode(owner)}`).join("\n")}`);
     break;
   }
 

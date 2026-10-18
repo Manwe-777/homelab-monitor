@@ -5,6 +5,8 @@ name: Homelab
 
 # Your Nostr public key: only you can read this monitor's data and get its alerts
 owner: npub1...
+# Or up to 3 people, each with their own phones and channels:
+# owner: [npub1..., npub1...]
 
 # Nostr relays, the app must use at least one of them
 # relays:

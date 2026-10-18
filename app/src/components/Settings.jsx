@@ -41,7 +41,7 @@ function Settings({ db, secretKey, monitors, onRemoveMonitor, onSignOut, onBack 
 
       <section className="card">
         <h2>Your key</h2>
-        <p className="muted">Monitors send alerts to this npub (their <code>owner</code>).</p>
+        <p className="muted">Monitors send alerts to this npub (listed as their <code>owner</code>).</p>
         <CopyField value={npubEncode(getPublicKey(secretKey))} />
         {showKey ? (
           <>

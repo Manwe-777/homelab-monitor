@@ -12,8 +12,8 @@ import { ToolDb, MapCrdt, generateSecretKey, getPublicKey } from "tool-db";
 import { ToolDbRelay } from "@tool-db/nostr-relay";
 import {
   TOPIC,
-  CONFIG_KEY,
-  STATUS_KEY,
+  configKey,
+  statusKey,
   alertsKey,
   devicesKey,
   namespaced,
@@ -111,7 +111,7 @@ test("monitor reports to its owner and pushes alerts to their devices", async (t
 
   const config = {
     name: "Test lab",
-    owner,
+    owners: [owner],
     relays: [relay.url],
     vapidSubject: "mailto:test@example.com",
     heartbeatMs: 60000,
@@ -167,13 +167,13 @@ test("monitor reports to its owner and pushes alerts to their devices", async (t
     decryptJson(phone.userAccount, identity.pubkey, await phone.getData(namespaced(identity.pubkey, key)));
 
   // The owner can read the config, with the VAPID key the app subscribes with
-  const published = await waitFor(() => readFromMonitor(CONFIG_KEY));
+  const published = await waitFor(() => readFromMonitor(configKey(owner)));
   assert.equal(published.name, "Test lab");
   assert.deepEqual(published.channels.map((c) => c.id), ["services", "quiet"]);
   assert.equal(published.vapidPublicKey, identity.vapid.publicKey);
 
   // Status: the check comes up, without alerting
-  await waitFor(async () => (await readFromMonitor(STATUS_KEY))?.checks?.["services/web"]?.state === "up");
+  await waitFor(async () => (await readFromMonitor(statusKey(owner)))?.checks?.["services/web"]?.state === "up");
   assert.equal(push.received.length, 0);
 
   // The service goes down: one alert after two failures, pushed to the phone
@@ -198,7 +198,7 @@ test("monitor reports to its owner and pushes alerts to their devices", async (t
   // The history has both alerts, encrypted for the owner
   const history = new MapCrdt(owner);
   await waitFor(async () => {
-    await phone.getCrdt(namespaced(identity.pubkey, alertsKey(monthOf(Date.now()))), history);
+    await phone.getCrdt(namespaced(identity.pubkey, alertsKey(monthOf(Date.now()), owner)), history);
     return Object.keys(history.value).length === 2;
   });
   const alerts = Object.values(await decryptMap(phone.userAccount, identity.pubkey, history.value));
@@ -238,7 +238,7 @@ test("monitor ignores devices that aren't the owner's", async (t) => {
   const monitor = new Monitor(
     {
       name: "Test lab",
-      owner,
+      owners: [owner],
       relays: [relay.url],
       vapidSubject: "mailto:test@example.com",
       heartbeatMs: 60000,
@@ -257,6 +257,103 @@ test("monitor ignores devices that aren't the owner's", async (t) => {
   await monitor.sendAlert({ id: "services", name: "Services" }, null, "test", "Test", "");
   await sleep(500);
 
-  assert.deepEqual(monitor.devices, {});
+  assert.deepEqual(monitor.devices, { [owner]: {} });
   assert.equal(push.received.length, 0);
+});
+
+/**
+ * Someone's phone, signed in with their key, with notifications enabled for
+ * some channels of a monitor
+ */
+async function ownerPhone(relayUrl, monitorPubkey, subscription, channels) {
+  const secretKey = generateSecretKey();
+  const pubkey = getPublicKey(secretKey);
+  const phone = new ToolDb({ relays: [relayUrl], topic: TOPIC });
+  await phone.ready;
+  await phone.keysSignIn(secretKey);
+  await waitFor(() => phone.isConnected);
+
+  const devices = new MapCrdt(pubkey);
+  devices.SET(
+    "phone",
+    await encryptJson(phone.userAccount, monitorPubkey, {
+      name: "Phone",
+      subscription,
+      channels,
+      updatedAt: Date.now(),
+    })
+  );
+  await phone.putCrdt(devicesKey(monitorPubkey), devices, true);
+
+  const read = async (key) =>
+    decryptJson(phone.userAccount, monitorPubkey, await phone.getData(namespaced(monitorPubkey, key(pubkey))));
+  const alerts = async () => {
+    const map = new MapCrdt(pubkey);
+    await phone.getCrdt(namespaced(monitorPubkey, alertsKey(monthOf(Date.now()), pubkey)), map);
+    return Object.values(await decryptMap(phone.userAccount, monitorPubkey, map.value));
+  };
+  return { phone, pubkey, read, alerts };
+}
+
+test("each owner gets their own copy, alerts for their channels, and the history so far", async (t) => {
+  const relay = new ToolDbRelay({ topic: "unused", port: 0, host: "127.0.0.1", acceptForeignEvents: true });
+  await relay.start();
+  const identity = loadIdentity(mkdtempSync(join(tmpdir(), "monitor-data-")));
+  const pushA = await fakePushService();
+  const pushB = await fakePushService();
+  const a = await ownerPhone(relay.url, identity.pubkey, pushA.subscription, ["services", "jobs"]);
+  const b = await ownerPhone(relay.url, identity.pubkey, pushB.subscription, ["jobs"]);
+  const channels = [
+    { id: "services", name: "Services", checks: [] },
+    { id: "jobs", name: "Jobs", checks: [] },
+  ];
+  const configFor = (owners) => ({
+    name: "Shared lab",
+    owners,
+    relays: [relay.url],
+    vapidSubject: "mailto:test@example.com",
+    heartbeatMs: 60000,
+    channels,
+  });
+
+  let monitor = null;
+  t.after(async () => {
+    await monitor?.stop();
+    await a.phone.close();
+    await b.phone.close();
+    await relay.close();
+    pushA.server.close();
+    pushB.server.close();
+  });
+  const run = async (owners) => {
+    await monitor?.stop();
+    monitor = new Monitor(configFor(owners), identity, { log: () => {} });
+    await monitor.start();
+  };
+
+  // A alone: an alert in A's history
+  await run([a.pubkey]);
+  await monitor.sendAlert(channels[0], null, "test", "Before B", "");
+  await waitFor(() => pushA.received.length === 1);
+
+  // B is added: B gets its own config, and the history so far
+  await run([a.pubkey, b.pubkey]);
+  assert.equal((await waitFor(() => b.read(configKey))).name, "Shared lab");
+  await waitFor(async () => (await b.alerts()).some((alert) => alert.title === "Before B"));
+  await waitFor(() => b.read(statusKey));
+
+  // Alerts go to each owner's devices for the channels they chose
+  await monitor.sendAlert(channels[0], null, "test", "Services only", "");
+  await monitor.sendAlert(channels[1], null, "test", "Jobs", "");
+  await waitFor(() => pushA.received.length === 3 && pushB.received.length === 1);
+  assert.equal(pushB.received[0].payload.title, "Jobs");
+  await waitFor(async () => (await a.alerts()).length === 3 && (await b.alerts()).length === 3);
+
+  // A is removed: nothing new for A, not even in A's history
+  await run([b.pubkey]);
+  await monitor.sendAlert(channels[1], null, "test", "After A", "");
+  await waitFor(() => pushB.received.length === 2);
+  await sleep(500);
+  assert.equal(pushA.received.length, 3);
+  assert.equal((await a.alerts()).length, 3);
 });

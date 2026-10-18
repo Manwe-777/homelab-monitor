@@ -27,7 +27,7 @@ test("status page shows public channels without targets, and health", async (t) 
   const monitor = new Monitor(
     {
       name: "Lab",
-      owner: getPublicKey(generateSecretKey()),
+      owners: [getPublicKey(generateSecretKey())],
       relays: [relay.url],
       vapidSubject: "mailto:test@example.com",
       heartbeatMs: 60000,
@@ -84,7 +84,7 @@ test("jobs report runs to their heartbeat URL", async (t) => {
   const monitor = new Monitor(
     {
       name: "Lab",
-      owner: getPublicKey(generateSecretKey()),
+      owners: [getPublicKey(generateSecretKey())],
       relays: [relay.url],
       vapidSubject: "mailto:test@example.com",
       heartbeatMs: 60000,

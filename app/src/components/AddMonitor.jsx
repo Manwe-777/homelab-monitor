@@ -55,7 +55,7 @@ function AddMonitor({ myPubkey, initialError = "", onAdd, onCancel, onSettings }
       </section>
 
       <section className="card">
-        <p className="muted small">This device's key. The monitor's <code>owner</code> must be this npub:</p>
+        <p className="muted small">This device's key. The monitor's <code>owner</code> must list this npub:</p>
         <CopyField value={npubEncode(myPubkey)} />
         <details className="details">
           <summary>Setting up a new monitor?</summary>

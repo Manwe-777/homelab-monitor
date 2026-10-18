@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { STATUS_KEY, CONFIG_KEY } from "@homelab-monitor/shared";
+import { statusKey, configKey } from "@homelab-monitor/shared";
 import { readConfig, readStatus, watchMonitorValue, getDeviceEntry, saveDeviceEntry } from "../lib/db";
 import { getDevice } from "../lib/session";
 import { subscribe, unsubscribe, currentSubscription, pushSupported } from "../lib/push";
@@ -33,8 +33,8 @@ function MonitorView({ db, monitor, monitors, initialTab, onSelect, onAdd, onSet
 
   useEffect(() => {
     load();
-    const stopConfig = watchMonitorValue(db, monitor, CONFIG_KEY, setConfig);
-    const stopStatus = watchMonitorValue(db, monitor, STATUS_KEY, setStatus);
+    const stopConfig = watchMonitorValue(db, monitor, configKey, setConfig);
+    const stopStatus = watchMonitorValue(db, monitor, statusKey, setStatus);
     return () => {
       stopConfig();
       stopStatus();
@@ -120,7 +120,7 @@ function MonitorView({ db, monitor, monitors, initialTab, onSelect, onAdd, onSet
         <section className="card">
           <h2>Waiting for this monitor</h2>
           <p className="muted">
-            Nothing from it yet. Check that it's running, that its <code>owner</code> is your npub,
+            Nothing from it yet. Check that it's running, that its <code>owner</code> lists your npub,
             and that it uses at least one of your relays.
           </p>
           <button className="btn" onClick={load}>Check again</button>
