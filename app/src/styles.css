@@ -91,3 +91,6 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 
 .spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.details { margin-top: 12px; }
+.details summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
+.details[open] summary { margin-bottom: 8px; }

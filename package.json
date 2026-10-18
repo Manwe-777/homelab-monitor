@@ -13,7 +13,7 @@
     "monitor": "npm run start -w monitor --",
     "app": "npm run dev -w app",
     "build": "npm run build -w app",
-    "test": "npm test -w shared && npm test -w monitor"
+    "test": "npm test -w shared && npm test -w monitor && npm test -w app"
   },
   "engines": {
     "node": ">=22"

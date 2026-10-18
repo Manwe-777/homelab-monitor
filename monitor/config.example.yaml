@@ -58,3 +58,6 @@ statusPage:
 #   - name: Private
 #     public: false
 #     checks: [...]
+
+# Where the app is hosted, for the links and QR codes `pair` shows
+# appUrl: https://manwe-777.github.io/homelab-monitor/

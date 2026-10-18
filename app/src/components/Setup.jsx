@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { saveSecretKey } from "../lib/session";
+import { keyInputProps } from "./AddMonitor";
 
 function Setup({ onDone }) {
   const [mode, setMode] = useState("choose");
@@ -50,6 +51,7 @@ function Setup({ onDone }) {
             placeholder="nsec1..."
             autoFocus
             required
+            {...keyInputProps}
           />
           {error && <p className="error">{error}</p>}
           <button className="btn btn--primary" type="submit">Continue</button>

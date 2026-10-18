@@ -2,6 +2,7 @@
 import { parseArgs } from "node:util";
 import { resolve, join } from "node:path";
 import { npubEncode } from "tool-db";
+import qrcode from "qrcode-terminal";
 import { checkRef } from "@homelab-monitor/shared";
 import { loadConfig } from "./config.js";
 import { loadIdentity } from "./identity.js";
@@ -38,12 +39,16 @@ const identity = loadIdentity(resolve(values.data));
 
 switch (command) {
   case "pair": {
-    console.log(`Monitor "${config.name}"
+    const npub = npubEncode(identity.pubkey);
+    const link = new URL(config.appUrl);
+    link.searchParams.set("pair", npub);
 
-  Monitor npub (paste it in the app): ${npubEncode(identity.pubkey)}
-  Owner npub (from config):           ${npubEncode(config.owner)}
+    console.log(`Pair the app with monitor "${config.name}": scan this with your phone's camera\n`);
+    qrcode.generate(link.href, { small: true }, (qr) => console.log(qr));
+    console.log(`Or open:      ${link.href}
+Or paste:     ${npub}
 
-Only the owner can read this monitor's data and receive its alerts.`);
+The app must be signed in with the owner's key: ${npubEncode(config.owner)}`);
     break;
   }
 

@@ -3,9 +3,17 @@ import { npubEncode } from "tool-db";
 import { parsePubkey } from "../lib/db";
 import CopyField from "./CopyField";
 
-function AddMonitor({ myPubkey, onAdd, onCancel, onSettings }) {
+// Keys are case sensitive to keyboards: no capitals, corrections or suggestions
+export const keyInputProps = {
+  autoCapitalize: "none",
+  autoCorrect: "off",
+  autoComplete: "off",
+  spellCheck: false,
+};
+
+function AddMonitor({ myPubkey, initialError = "", onAdd, onCancel, onSettings }) {
   const [value, setValue] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError);
 
   const submit = (e) => {
     e.preventDefault();
@@ -20,35 +28,40 @@ function AddMonitor({ myPubkey, onAdd, onCancel, onSettings }) {
   return (
     <main className="page">
       <header className="topbar">
-        <h1>Add a monitor</h1>
+        <h1>Pair a monitor</h1>
         <button className="btn btn--ghost btn--small" onClick={onSettings}>Settings</button>
       </header>
 
       <section className="card">
-        <h2>1. Make the monitor yours</h2>
-        <p className="muted">Set your npub as the owner in the monitor's <code>config.yaml</code>:</p>
-        <CopyField value={npubEncode(myPubkey)} />
-        <pre className="snippet">owner: {npubEncode(myPubkey)}</pre>
-      </section>
-
-      <section className="card">
-        <h2>2. Pair</h2>
-        <p className="muted">
-          Run <code>homelab-monitor pair</code> on the server and paste the monitor's npub:
+        <p>
+          On the server, run <code>homelab-monitor pair</code> and scan its QR code with your
+          camera. Or paste the monitor's npub here:
         </p>
         <form className="stack" onSubmit={submit}>
           <input
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="npub1..."
+            aria-label="Monitor npub"
             required
+            {...keyInputProps}
           />
           {error && <p className="error">{error}</p>}
-          <button className="btn btn--primary" type="submit">Add monitor</button>
+          <button className="btn btn--primary" type="submit">Pair</button>
           {onCancel && (
             <button className="btn btn--ghost" type="button" onClick={onCancel}>Cancel</button>
           )}
         </form>
+      </section>
+
+      <section className="card">
+        <p className="muted small">This device's key. The monitor's <code>owner</code> must be this npub:</p>
+        <CopyField value={npubEncode(myPubkey)} />
+        <details className="details">
+          <summary>Setting up a new monitor?</summary>
+          <p className="muted">Put this in its <code>config.yaml</code>, then pair:</p>
+          <pre className="snippet">owner: {npubEncode(myPubkey)}</pre>
+        </details>
       </section>
     </main>
   );

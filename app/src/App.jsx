@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { getPublicKey } from "tool-db";
 import { getSecretKey, forgetSecretKey } from "./lib/session";
-import { connect, getMonitors, saveMonitors } from "./lib/db";
+import { connect, getMonitors, saveMonitors, parsePubkey } from "./lib/db";
 import { unsubscribe } from "./lib/push";
 import Setup from "./components/Setup";
 import AddMonitor from "./components/AddMonitor";
@@ -14,12 +14,16 @@ function readLink() {
   return { monitor: params.get("monitor"), tab: params.get("tab") };
 }
 
+// A pairing link from `homelab-monitor pair`: ?pair=npub1...
+const pairParam = new URLSearchParams(location.search).get("pair");
+
 function App() {
   const [secretKey, setSecretKey] = useState(getSecretKey);
   const [db, setDb] = useState(null);
   const [error, setError] = useState("");
   const [monitors, setMonitors] = useState(null);
   const [screen, setScreen] = useState({ name: "monitor", ...readLink() });
+  const [pairError, setPairError] = useState("");
 
   useEffect(() => {
     if (!secretKey) return;
@@ -32,6 +36,22 @@ function App() {
         const list = await getMonitors(connected);
         if (cancelled) return;
         setDb(connected);
+
+        // Pair from the link once, then drop it from the address
+        if (pairParam) {
+          history.replaceState(null, "", location.pathname);
+          try {
+            const pubkey = parsePubkey(pairParam);
+            if (!list.some((m) => m.pubkey === pubkey)) {
+              list.push({ pubkey, addedAt: Date.now() });
+              await saveMonitors(connected, list);
+            }
+            setScreen({ name: "monitor", monitor: pubkey });
+          } catch (err) {
+            setPairError(err.message);
+            setScreen({ name: "add" });
+          }
+        }
         setMonitors(list);
       })
       .catch((err) => setError(err.message));
@@ -119,6 +139,7 @@ function App() {
     return (
       <AddMonitor
         myPubkey={myPubkey}
+        initialError={pairError}
         onAdd={addMonitor}
         onCancel={monitors.length ? () => setScreen({ name: "monitor" }) : null}
         onSettings={() => setScreen({ name: "settings" })}

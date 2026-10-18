@@ -1,4 +1,4 @@
-import { ToolDb, MapCrdt, npubDecode } from "tool-db";
+import { ToolDb, MapCrdt } from "tool-db";
 import { ToolDbIndexedDb } from "@tool-db/indexeddb-store";
 import {
   TOPIC,
@@ -12,6 +12,8 @@ import {
   decryptMap,
 } from "@homelab-monitor/shared";
 import { getRelays } from "./session";
+
+export { parsePubkey } from "./parsePubkey";
 
 const MONITORS_KEY = "monitors";
 
@@ -40,21 +42,6 @@ export function waitForRelays(db, timeoutMs = 5000) {
 }
 
 export const me = (db) => db.userAccount.getAddress();
-
-/**
- * Accepts a public key as npub or hex, returns it as hex
- */
-export function parsePubkey(value) {
-  const trimmed = value.trim();
-  let hex = trimmed;
-  try {
-    if (trimmed.startsWith("npub1")) hex = npubDecode(trimmed);
-  } catch {
-    hex = "";
-  }
-  if (!/^[0-9a-f]{64}$/.test(hex)) throw new Error("That's not a valid npub");
-  return hex;
-}
 
 /**
  * The monitors we paired with, synced between our devices (encrypted for ourselves)

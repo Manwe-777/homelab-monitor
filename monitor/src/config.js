@@ -76,6 +76,8 @@ export function loadConfig(path) {
     owner: parseOwner(raw.owner),
     relays: raw.relays || DEFAULT_RELAYS,
     vapidSubject: raw.vapidSubject || "mailto:monitor@homelab.local",
+    // Where the app is hosted, for pairing links
+    appUrl: raw.appUrl || "https://manwe-777.github.io/homelab-monitor/",
     heartbeatMs: (raw.heartbeat ?? 300) * 1000,
     // On by default, `statusPage: false` turns it off
     statusPage:
