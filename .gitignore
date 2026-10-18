@@ -7,3 +7,7 @@ dist
 # Monitor secrets and state
 monitor/data
 monitor/config.yaml
+
+# Local docker compose
+/config.yaml
+/data

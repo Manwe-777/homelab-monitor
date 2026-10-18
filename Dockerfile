@@ -1,4 +1,4 @@
-# The monitor and its status page. The app (PWA) is hosted separately.
+# The monitor and its status page. The app (PWA) is hosted on GitHub Pages.
 FROM node:22-alpine
 
 WORKDIR /app

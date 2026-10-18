@@ -1,0 +1,28 @@
+# The monitor and its status page.
+#
+#   cp monitor/config.example.yaml config.yaml   # set `owner` to your npub
+#   docker compose up -d --build
+#   docker compose exec monitor homelab-monitor pair
+#
+# Deployment specifics (where config and data live, ports) go in an
+# override file: docker compose -f docker-compose.yml -f my.override.yml up -d
+name: homelab-monitor
+
+services:
+  monitor:
+    build: .
+    image: homelab-monitor:local
+    container_name: homelab-monitor
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+      # Its keys and uptime history: keep it, or you'll have to pair again
+      - ./data:/data
+      # Only for `docker` checks. Anything that can talk to the Docker API
+      # can own the host, so prefer http/tcp checks when you can.
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "3001:3001"   # status page
+    extra_hosts:
+      # Services published on the host: http://host.docker.internal:PORT
+      - "host.docker.internal:host-gateway"

@@ -62,17 +62,19 @@ or you'll need to pair again).
 ### Docker
 
 ```bash
-docker build -t homelab-monitor .
+cp monitor/config.example.yaml config.yaml   # set `owner` to your npub
+docker compose up -d --build
+docker compose exec monitor homelab-monitor pair
 ```
 
-See [`deploy/docker-compose.yml`](deploy/docker-compose.yml) for a service to
-add to your homelab's compose file. In the container:
+[`docker-compose.yml`](docker-compose.yml) keeps the config in `./config.yaml`
+and the keys and uptime history in `./data`. Put deployment specifics (other
+paths, ports) in an override file. In the container:
 
-- config is `/config/config.yaml`, data is the `/data` volume;
-- services on the host are at `http://host.docker.internal:PORT`, services in
-  the same compose network by their name (`http://glance:8080`);
-- `docker` checks need the Docker socket mounted;
-- `docker compose exec homelab-monitor homelab-monitor pair` shows the npub.
+- services published on the host are at `http://host.docker.internal:PORT`,
+  services in the same compose network by their name (`http://glance:8080`);
+- `docker` checks need the Docker socket mounted, which gives the container
+  control of the host: prefer `http` and `tcp` checks.
 
 ### Status page
 
