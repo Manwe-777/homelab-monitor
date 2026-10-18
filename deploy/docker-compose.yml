@@ -1,0 +1,21 @@
+# Add this service to your homelab's compose file.
+# Put config.yaml next to it (see monitor/config.example.yaml).
+services:
+  homelab-monitor:
+    build: ../                       # path to this repo, or a git URL
+    container_name: homelab-monitor
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+      - homelab-monitor-data:/data   # keys and uptime history, keep it
+      # Only for `docker` checks. Gives the container access to the Docker API.
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
+    # group_add: ["${DOCKER_GID:-972}"]  # with the socket: the host's docker group id
+    ports:
+      - "127.0.0.1:3001:3001"        # status page, for your reverse proxy
+    extra_hosts:
+      # Reach services published on the host as http://host.docker.internal:PORT
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  homelab-monitor-data:

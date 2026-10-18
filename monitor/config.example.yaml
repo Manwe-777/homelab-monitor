@@ -1,0 +1,60 @@
+# Copy to config.yaml and edit.
+
+# Shown in the app
+name: Homelab
+
+# Your Nostr public key: only you can read this monitor's data and get its alerts
+owner: npub1...
+
+# Nostr relays, the app must use at least one of them
+# relays:
+#   - wss://relay.damus.io
+#   - wss://nos.lol
+
+# Defaults for every check (each check can override them)
+interval: 60             # seconds between checks
+timeout: 10              # seconds before a check fails
+failuresBeforeAlert: 2   # failures in a row before alerting
+
+# How often the monitor reports it's alive, in seconds
+heartbeat: 300
+
+# Channels group checks, the app chooses which channels notify each device
+channels:
+  - name: Dashboards
+    checks:
+      - name: Glance
+        type: http
+        url: http://localhost:8080
+        # expectStatus: 200
+        # contains: "Glance"
+
+  - name: Infra
+    checks:
+      - name: SSH
+        type: tcp
+        host: 127.0.0.1
+        port: 22
+
+      # Needs access to the Docker socket (user in the docker group)
+      # - name: Jellyfin
+      #   type: docker
+      #   container: jellyfin
+
+      # - name: Router admin
+      #   type: http
+      #   url: https://192.168.1.1
+      #   insecure: true   # self-signed certificate
+
+# Public status page (on by default, `statusPage: false` turns it off).
+# Put it behind your reverse proxy, e.g. status.example.com -> http://127.0.0.1:3001
+statusPage:
+  port: 3001
+  host: 127.0.0.1        # 0.0.0.0 to reach it from other machines or containers
+  # title: My Homelab    # defaults to `name`
+  # showTargets: false   # show URLs/hosts on the page (they're hidden by default)
+
+# A channel with `public: false` notifies you but stays off the status page:
+#   - name: Private
+#     public: false
+#     checks: [...]

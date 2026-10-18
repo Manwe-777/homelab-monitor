@@ -1,0 +1,22 @@
+{
+  "name": "@homelab-monitor/app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@homelab-monitor/shared": "0.1.0",
+    "@tool-db/indexeddb-store": "2.0.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "tool-db": "3.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "5.1.1",
+    "vite": "7.3.1"
+  }
+}

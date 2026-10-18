@@ -1,0 +1,16 @@
+{
+  "name": "@homelab-monitor/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "peerDependencies": {
+    "tool-db": "3.0.0"
+  }
+}

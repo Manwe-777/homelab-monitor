@@ -1,0 +1,23 @@
+{
+  "name": "@homelab-monitor/monitor",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "homelab-monitor": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@homelab-monitor/shared": "0.1.0",
+    "tool-db": "3.0.0",
+    "web-push": "3.6.7",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@tool-db/nostr-relay": "1.0.0",
+    "http_ece": "1.2.1"
+  }
+}

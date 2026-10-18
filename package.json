@@ -1,0 +1,21 @@
+{
+  "name": "homelab-monitor",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Homelab monitor with encrypted phone alerts over Nostr (tool-db)",
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "monitor",
+    "app"
+  ],
+  "scripts": {
+    "monitor": "npm run start -w monitor --",
+    "app": "npm run dev -w app",
+    "build": "npm run build -w app",
+    "test": "npm test -w shared && npm test -w monitor"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
