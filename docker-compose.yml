@@ -1,7 +1,7 @@
-# The monitor and its status page.
+# The monitor and its status page. See "Set up your own" in the README.
 #
-#   cp monitor/config.example.yaml config.yaml   # set `owner` to your npub
-#   docker compose up -d --build
+#   mkdir -p data                 # the monitor runs as uid 1000
+#   docker compose up -d          # the published image (--build to build it here)
 #   docker compose exec monitor homelab-monitor pair
 #
 # Deployment specifics (where config and data live, ports) go in an
@@ -10,8 +10,8 @@ name: homelab-monitor
 
 services:
   monitor:
+    image: ghcr.io/manwe-777/homelab-monitor:latest
     build: .
-    image: homelab-monitor:local
     container_name: homelab-monitor
     restart: unless-stopped
     volumes:

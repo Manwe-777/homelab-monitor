@@ -19,8 +19,19 @@ function readOrCreate(path, create) {
  *                 restart to rotate every heartbeat URL.
  */
 export function loadIdentity(dataDir) {
-  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  try {
+    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    return loadKeys(dataDir);
+  } catch (err) {
+    if (err.code !== "EACCES") throw err;
+    throw new Error(
+      `Can't write to the data directory ${dataDir}. In Docker the monitor runs as uid 1000: ` +
+        `create the directory first, or chown 1000:1000 it on the host.`
+    );
+  }
+}
 
+function loadKeys(dataDir) {
   const nsec = readOrCreate(join(dataDir, "monitor.key"), () => nsecEncode(generateSecretKey()));
   const secretKey = normalizeSecretKey(nsec);
 

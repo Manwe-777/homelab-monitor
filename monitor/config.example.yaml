@@ -25,7 +25,8 @@ channels:
     checks:
       - name: Glance
         type: http
-        url: http://localhost:8080
+        # In Docker, services on this machine are at host.docker.internal
+        url: http://host.docker.internal:8080
         # expectStatus: 200
         # contains: "Glance"
 
@@ -33,7 +34,7 @@ channels:
     checks:
       - name: SSH
         type: tcp
-        host: 127.0.0.1
+        host: host.docker.internal
         port: 22
 
       # Needs access to the Docker socket (user in the docker group)
@@ -49,7 +50,7 @@ channels:
       # Free space on the filesystem holding a path
       - name: Root disk
         type: disk
-        path: /
+        path: /data          # in Docker: the machine's disk, where the data dir lives
         maxUsedPercent: 90   # default 90
         # minFreeGb: 10
         # marker: MOUNTED    # a file that must exist: catches an unmounted share
@@ -71,10 +72,10 @@ channels:
         grace: 3h    # how late it may be (default 1h)
 
 # Public status page (on by default, `statusPage: false` turns it off).
-# Put it behind your reverse proxy, e.g. status.example.com -> http://127.0.0.1:3001
+# Put it behind your reverse proxy, e.g. status.example.com -> http://THIS-MACHINE:3001
 statusPage:
   port: 3001
-  host: 127.0.0.1        # 0.0.0.0 to reach it from other machines or containers
+  # host: 127.0.0.1      # default outside Docker; the Docker image listens on 0.0.0.0
   # title: My Homelab    # defaults to `name`
   # showTargets: false   # show URLs/hosts on the page (they're hidden by default)
 
