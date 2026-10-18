@@ -21,11 +21,29 @@ export function parseDuration(value) {
 }
 
 /**
- * The secret part of a heartbeat URL, derived from the monitor's key so it
- * never has to be stored in the config
+ * The secret part of a heartbeat URL, derived from the monitor's heartbeat
+ * key so it never has to be stored in the config
  */
-export function heartbeatToken(secretKey, ref) {
-  return createHmac("sha256", secretKey).update(`heartbeat:${ref}`).digest("hex").slice(0, 32);
+export function heartbeatToken(heartbeatKey, ref) {
+  return createHmac("sha256", heartbeatKey).update(`heartbeat:${ref}`).digest("hex").slice(0, 32);
+}
+
+/**
+ * The environment variable holding a heartbeat check's token, in heartbeats.env
+ */
+export const heartbeatVariable = (ref) => `HEARTBEAT_${ref.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
+
+/**
+ * heartbeats.env: every heartbeat token, for jobs to read (systemd
+ * EnvironmentFile=) instead of keeping them in their own config
+ */
+export function heartbeatsEnv(heartbeatKey, refs) {
+  return [
+    "# Written by homelab-monitor on start, do not edit. One token per heartbeat check:",
+    "# the job calls <monitor>/heartbeat/$VARIABLE when it ends.",
+    ...refs.map((ref) => `${heartbeatVariable(ref)}=${heartbeatToken(heartbeatKey, ref)}`),
+    "",
+  ].join("\n");
 }
 
 /**

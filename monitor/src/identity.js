@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { randomBytes } from "node:crypto";
 import { generateSecretKey, getPublicKey, nsecEncode, normalizeSecretKey } from "tool-db";
 import webpush from "web-push";
 
@@ -14,6 +15,8 @@ function readOrCreate(path, create) {
  * The monitor's own identity, created on first run and kept in the data dir:
  *   monitor.key   its Nostr secret key (nsec)
  *   vapid.json    its Web Push (VAPID) keys
+ *   heartbeat.key the secret heartbeat URLs are derived from. Delete it and
+ *                 restart to rotate every heartbeat URL.
  */
 export function loadIdentity(dataDir) {
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -25,5 +28,7 @@ export function loadIdentity(dataDir) {
     readOrCreate(join(dataDir, "vapid.json"), () => JSON.stringify(webpush.generateVAPIDKeys()))
   );
 
-  return { secretKey, pubkey: getPublicKey(secretKey), vapid };
+  const heartbeatKey = readOrCreate(join(dataDir, "heartbeat.key"), () => randomBytes(32).toString("hex"));
+
+  return { secretKey, pubkey: getPublicKey(secretKey), vapid, heartbeatKey };
 }

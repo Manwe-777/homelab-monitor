@@ -72,49 +72,20 @@ or you'll need to pair again).
 
 Every check also takes `interval`, `timeout` and `failuresBeforeAlert`.
 
-**Heartbeats:** `homelab-monitor heartbeats --base http://HOST:PORT` prints the
-URL of each heartbeat check and a line to add to the job's systemd service:
+**Heartbeats:** each heartbeat check has a secret URL. On start, the monitor
+writes their tokens to `heartbeats.env` in its data directory (0600), so jobs
+read them from there instead of keeping them in their own config.
+`homelab-monitor heartbeats --base http://HOST:PORT --env-file PATH` prints
+the lines to add to each job's systemd service:
 
 ```ini
-ExecStopPost=-/bin/sh -c 'curl -fsS -m 10 -o /dev/null "URL?status=$SERVICE_RESULT&exit=$EXIT_STATUS"'
+EnvironmentFile=/path/to/data/heartbeats.env
+ExecStopPost=-/bin/sh -c 'curl -fsS -m 10 -o /dev/null "http://HOST:PORT/heartbeat/$HEARTBEAT_JOBS_NIGHTLY_BACKUP?status=$SERVICE_RESULT&exit=$EXIT_STATUS"'
 ```
 
 systemd runs it when the job ends, successful or not, so a failed run alerts
-right away. The URL's token is derived from the monitor's key: nothing to store
-in the config.
-
-### Docker
-
-```bash
-cp monitor/config.example.yaml config.yaml   # set `owner` to your npub
-docker compose up -d --build
-docker compose exec monitor homelab-monitor pair
-```
-
-[`docker-compose.yml`](docker-compose.yml) keeps the config in `./config.yaml`
-and the keys and uptime history in `./data`. Put deployment specifics (other
-paths, ports) in an override file. In the container:
-
-- services published on the host are at `http://host.docker.internal:PORT`,
-  services in the same compose network by their name (`http://glance:8080`);
-- `docker` checks need the Docker socket mounted, which gives the container
-  control of the host: prefer `http` and `tcp` checks.
-
-### Status page
-
-A public page like [githubstatus.com](https://www.githubstatus.com/): overall
-status, each public channel with 90 days of uptime, past incidents, and the
-monitor's own health (relays connected, last check). Check targets (URLs,
-hosts) are hidden unless `statusPage.showTargets` is set, and channels with
-`public: false` are left out.
-
-- `GET /` the page, `GET /api/status` the same as JSON
-- `GET /health` 200 when checks run and relays are connected, 503 otherwise:
-  point Glance or an external uptime checker at it to know if the monitor itself
-  is down
-
-Serve it through your reverse proxy, e.g. `status.example.com` →
-`http://127.0.0.1:3001`.
+right away. To rotate every heartbeat URL, delete `heartbeat.key` from the data
+directory and restart the monitor: the jobs read the new tokens on their next run.
 
 ## App
 

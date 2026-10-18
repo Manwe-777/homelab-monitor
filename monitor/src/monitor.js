@@ -16,7 +16,8 @@ import {
 } from "@homelab-monitor/shared";
 import { runCheck, CHECK_TYPES } from "./checks/index.js";
 import { UptimeHistory } from "./history.js";
-import { heartbeatToken } from "./checks/heartbeat.js";
+import { writeFileSync } from "node:fs";
+import { heartbeatToken, heartbeatsEnv } from "./checks/heartbeat.js";
 import { createStatusServer } from "./statusPage.js";
 
 const timestamp = () => new Date().toISOString().replace("T", " ").slice(0, 19);
@@ -32,13 +33,19 @@ export class Monitor {
    * @param config from loadConfig
    * @param identity from loadIdentity
    * @param options.historyPath where to keep the uptime history (in memory if not set)
+   * @param options.heartbeatsEnvPath where to write the heartbeat tokens for jobs (not written if not set)
    * @param options.toolDbOptions extra ToolDb options (tests)
    */
-  constructor(config, identity, { log = defaultLog, historyPath = null, toolDbOptions = {} } = {}) {
+  constructor(
+    config,
+    identity,
+    { log = defaultLog, historyPath = null, heartbeatsEnvPath = null, toolDbOptions = {} } = {}
+  ) {
     this.config = config;
     this.identity = identity;
     this.log = log;
     this.toolDbOptions = toolDbOptions;
+    this.heartbeatsEnvPath = heartbeatsEnvPath;
     this.history = new UptimeHistory(historyPath);
     this.startedAt = Date.now();
     this.lastCheckAt = 0;
@@ -48,7 +55,7 @@ export class Monitor {
     for (const channel of config.channels) {
       for (const check of channel.checks.filter((c) => c.type === "heartbeat")) {
         const ref = checkRef(channel.id, check.id);
-        this.heartbeats.set(heartbeatToken(identity.secretKey, ref), { channel, check, ref });
+        this.heartbeats.set(heartbeatToken(identity.heartbeatKey, ref), { channel, check, ref });
       }
     }
 
@@ -101,6 +108,10 @@ export class Monitor {
    * Connects and runs the checks until stopped
    */
   async start() {
+    if (this.heartbeatsEnvPath) {
+      const refs = [...this.heartbeats.values()].map((heartbeat) => heartbeat.ref);
+      writeFileSync(this.heartbeatsEnvPath, heartbeatsEnv(this.identity.heartbeatKey, refs), { mode: 0o600 });
+    }
     if (this.config.statusPage) await this.startStatusPage();
     await this.connect();
     await this.loadPreviousStatus();

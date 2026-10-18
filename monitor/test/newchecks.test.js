@@ -88,3 +88,11 @@ test("heartbeat check", () => {
   assert.throws(() => parseDuration("soon"), /isn't a duration/);
   assert.notEqual(heartbeatToken("a".repeat(64), "jobs/backup"), heartbeatToken("a".repeat(64), "jobs/other"));
 });
+
+test("heartbeats.env holds a token per heartbeat check", async () => {
+  const { heartbeatsEnv, heartbeatVariable } = await import("../src/checks/heartbeat.js");
+  const env = heartbeatsEnv("k".repeat(64), ["backups/immich-database-backup", "jobs/nightly"]);
+  assert.equal(heartbeatVariable("backups/immich-database-backup"), "HEARTBEAT_BACKUPS_IMMICH_DATABASE_BACKUP");
+  assert.match(env, new RegExp(`^HEARTBEAT_BACKUPS_IMMICH_DATABASE_BACKUP=${heartbeatToken("k".repeat(64), "backups/immich-database-backup")}$`, "m"));
+  assert.match(env, /^HEARTBEAT_JOBS_NIGHTLY=[0-9a-f]{32}$/m);
+});

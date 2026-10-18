@@ -109,7 +109,7 @@ test("jobs report runs to their heartbeat URL", async (t) => {
   });
   await monitor.start();
   const base = `http://127.0.0.1:${monitor.statusServer.address().port}`;
-  const url = `${base}/heartbeat/${heartbeatToken(identity.secretKey, "jobs/backup")}`;
+  const url = `${base}/heartbeat/${heartbeatToken(identity.heartbeatKey, "jobs/backup")}`;
 
   // Before any run: waiting, not down
   await sleep(200);

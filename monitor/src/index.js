@@ -8,7 +8,7 @@ import { loadConfig } from "./config.js";
 import { loadIdentity } from "./identity.js";
 import { Monitor } from "./monitor.js";
 import { runCheck } from "./checks/index.js";
-import { heartbeatToken } from "./checks/heartbeat.js";
+import { heartbeatVariable } from "./checks/heartbeat.js";
 
 const USAGE = `Usage: homelab-monitor [command] [--config config.yaml] [--data ./data]
 
@@ -17,8 +17,8 @@ Commands:
   pair                 Show the keys to pair the app with this monitor
   check                Run every check once and print the results
   test-alert [channel] Send a test alert to a channel (the first one by default)
-  heartbeats [--base URL]
-                       Show the URL each heartbeat check's job must call
+  heartbeats [--base URL] [--env-file PATH]
+                       Show how each heartbeat check's job reports its runs
 `;
 
 const { values, positionals } = parseArgs({
@@ -28,6 +28,7 @@ const { values, positionals } = parseArgs({
     data: { type: "string", default: process.env.HOMELAB_MONITOR_DATA || "data" },
     help: { type: "boolean", short: "h" },
     base: { type: "string" },
+    "env-file": { type: "string" },
   },
 });
 
@@ -58,18 +59,20 @@ The app must be signed in with the owner's key: ${npubEncode(config.owner)}`);
 
   case "heartbeats": {
     const base = (values.base || `http://127.0.0.1:${config.statusPage?.port ?? 3001}`).replace(/\/$/, "");
+    const envFile = values["env-file"] || join(resolve(values.data), "heartbeats.env");
     const heartbeats = config.channels.flatMap((channel) =>
       channel.checks.filter((check) => check.type === "heartbeat").map((check) => ({ channel, check }))
     );
     if (heartbeats.length === 0) console.log("No heartbeat checks in the config.");
 
+    console.log(`The tokens are in ${envFile}, written when the monitor starts.
+Add these to each job's systemd [Service] (--env-file: that file's path on the host):
+`);
     for (const { channel, check } of heartbeats) {
-      const ref = checkRef(channel.id, check.id);
-      const url = `${base}/heartbeat/${heartbeatToken(identity.secretKey, ref)}`;
-      console.log(`${check.name} (${ref})
-  ${url}
-  systemd, in its [Service]:
-  ExecStopPost=-/bin/sh -c 'curl -fsS -m 10 -o /dev/null "${url}?status=$SERVICE_RESULT&exit=$EXIT_STATUS"'
+      const variable = heartbeatVariable(checkRef(channel.id, check.id));
+      console.log(`${check.name}
+  EnvironmentFile=${envFile}
+  ExecStopPost=-/bin/sh -c 'curl -fsS -m 10 -o /dev/null "${base}/heartbeat/$${variable}?status=$SERVICE_RESULT&exit=$EXIT_STATUS"'
 `);
     }
     break;
@@ -115,7 +118,10 @@ The app must be signed in with the owner's key: ${npubEncode(config.owner)}`);
   }
 
   case "run": {
-    const monitor = new Monitor(config, identity, { historyPath: join(resolve(values.data), "history.json") });
+    const monitor = new Monitor(config, identity, {
+      historyPath: join(resolve(values.data), "history.json"),
+      heartbeatsEnvPath: join(resolve(values.data), "heartbeats.env"),
+    });
     const shutdown = async () => {
       await monitor.stop();
       process.exit(0);
