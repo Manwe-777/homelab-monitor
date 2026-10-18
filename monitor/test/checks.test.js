@@ -52,3 +52,13 @@ test("docker check reports a missing socket", async () => {
   assert.equal(result.ok, false);
   assert.match(result.message, /Docker: ENOENT/);
 });
+
+test("a check that never answers times out", async () => {
+  const { CHECK_TYPES } = await import("../src/checks/index.js");
+  CHECK_TYPES.hang = { run: () => new Promise(() => {}), target: () => "", required: [] };
+  const started = Date.now();
+  const result = await runCheck({ type: "hang", timeoutMs: 100 });
+  assert.deepEqual(result, { ok: false, message: "No answer after 1100 ms" });
+  assert.ok(Date.now() - started < 2000);
+  delete CHECK_TYPES.hang;
+});

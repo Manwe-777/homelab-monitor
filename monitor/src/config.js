@@ -3,6 +3,7 @@ import YAML from "yaml";
 import { npubDecode } from "tool-db";
 import { DEFAULT_RELAYS } from "@homelab-monitor/shared";
 import { CHECK_TYPES } from "./checks/index.js";
+import { parseDuration } from "./checks/heartbeat.js";
 
 const slug = (text) =>
   String(text)
@@ -57,19 +58,36 @@ export function loadConfig(path) {
       if (checkIds.has(checkId)) throw new Error(`config: ${where} duplicates id "${checkId}"`);
       checkIds.add(checkId);
 
+      const heartbeat = check.type === "heartbeat";
+      let durations = {};
+      if (heartbeat) {
+        try {
+          durations = { everyMs: parseDuration(check.every), graceMs: parseDuration(check.grace ?? "1h") };
+        } catch (err) {
+          throw new Error(`config: ${where}: ${err.message}`);
+        }
+      }
+
       return {
         ...check,
+        ...durations,
         id: checkId,
         name: check.name || type.target(check),
         intervalMs: check.interval ? check.interval * 1000 : defaults.intervalMs,
         timeoutMs: check.timeout ? check.timeout * 1000 : defaults.timeoutMs,
-        failuresBeforeAlert: check.failuresBeforeAlert ?? defaults.failuresBeforeAlert,
+        // A missed heartbeat window is already definitive
+        failuresBeforeAlert: check.failuresBeforeAlert ?? (heartbeat ? 1 : defaults.failuresBeforeAlert),
       };
     });
 
     // Channels with `public: false` are left out of the status page
     return { id, name: channel.name || id, public: channel.public !== false, checks };
   });
+
+  const statusPage = raw.statusPage === false ? null : raw.statusPage;
+  if (!statusPage && channels.some((c) => c.checks.some((check) => check.type === "heartbeat"))) {
+    throw new Error("config: heartbeat checks are reported to the status page server, don't turn it off");
+  }
 
   return {
     name: raw.name || "Homelab",

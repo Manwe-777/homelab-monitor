@@ -1,6 +1,7 @@
 import http from "node:http";
 import { checkRef } from "@homelab-monitor/shared";
 import { HISTORY_DAYS } from "./history.js";
+import { CHECK_TYPES } from "./checks/index.js";
 
 const escape = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -48,7 +49,7 @@ export function getPublicStatus(monitor, now = Date.now()) {
         return {
           id: check.id,
           name: check.name,
-          ...(page.showTargets ? { target: check.url || check.container || `${check.host}:${check.port}` } : {}),
+          ...(page.showTargets ? { target: String(CHECK_TYPES[check.type].target(check)) } : {}),
           status,
           since: state.since || null,
           checkedAt: state.checkedAt || null,
@@ -277,6 +278,7 @@ footer { margin-top: 32px; color: var(--muted); font-size: 0.8rem; text-align: c
  *   GET /             the status page
  *   GET /api/status   the same data as JSON
  *   GET /health       200 when checks run and relays are connected, 503 otherwise
+ *   /heartbeat/TOKEN  a job reporting a run (?status=success, or systemd's result)
  */
 export function createStatusServer(monitor) {
   return http.createServer((req, res) => {
@@ -285,6 +287,20 @@ export function createStatusServer(monitor) {
       res.writeHead(code, { "content-type": type, "cache-control": "no-store" });
       res.end(req.method === "HEAD" ? undefined : body);
     };
+
+    const heartbeat = path.match(/^\/heartbeat\/([0-9a-f]+)$/);
+    if (heartbeat) {
+      // ?status= is systemd's $SERVICE_RESULT ("success" when the job worked)
+      const params = new URL(req.url, "http://localhost").searchParams;
+      const status = params.get("status") || "success";
+      const exit = params.get("exit");
+      const ok = status === "success";
+      const message = ok ? "" : `${status}${exit && exit !== "0" ? ` (exit ${exit})` : ""}`;
+      monitor
+        .receiveHeartbeat(heartbeat[1], { ok, message })
+        .then((found) => send(found ? 200 : 404, "text/plain", found ? "ok\n" : "Unknown heartbeat\n"));
+      return;
+    }
 
     if (req.method !== "GET" && req.method !== "HEAD") {
       send(405, "text/plain", "Method not allowed");

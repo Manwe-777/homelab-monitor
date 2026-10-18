@@ -16,6 +16,7 @@ import {
 } from "@homelab-monitor/shared";
 import { runCheck, CHECK_TYPES } from "./checks/index.js";
 import { UptimeHistory } from "./history.js";
+import { heartbeatToken } from "./checks/heartbeat.js";
 import { createStatusServer } from "./statusPage.js";
 
 const timestamp = () => new Date().toISOString().replace("T", " ").slice(0, 19);
@@ -41,6 +42,15 @@ export class Monitor {
     this.history = new UptimeHistory(historyPath);
     this.startedAt = Date.now();
     this.lastCheckAt = 0;
+
+    // Heartbeat checks, by the token in their URL
+    this.heartbeats = new Map();
+    for (const channel of config.channels) {
+      for (const check of channel.checks.filter((c) => c.type === "heartbeat")) {
+        const ref = checkRef(channel.id, check.id);
+        this.heartbeats.set(heartbeatToken(identity.secretKey, ref), { channel, check, ref });
+      }
+    }
 
     this.states = {};
     this.devices = {};
@@ -209,10 +219,29 @@ export class Monitor {
    */
   async runCheck(channel, check) {
     const ref = checkRef(channel.id, check.id);
-    const result = await runCheck(check);
+    // Don't pile up runs behind one that hangs
+    if (this.running?.has(ref)) return;
+    (this.running ||= new Set()).add(ref);
+    try {
+      await this.evaluateCheck(channel, check, ref);
+    } finally {
+      this.running.delete(ref);
+    }
+  }
+
+  async evaluateCheck(channel, check, ref) {
+    const context =
+      check.type === "heartbeat" ? { beat: this.history.beat(ref), waitingSince: this.startedAt } : undefined;
+    const result = await runCheck(check, context);
     const state = this.states[ref];
     const now = Date.now();
     const previous = state.state;
+
+    // Nothing to judge yet (a heartbeat before its first run)
+    if (result.pending) {
+      state.message = result.message;
+      return;
+    }
 
     state.checkedAt = now;
     state.message = result.message;
@@ -346,6 +375,20 @@ export class Monitor {
       })
     );
     return targets.length;
+  }
+
+  /**
+   * A job reporting a run for a heartbeat check
+   * @returns false for an unknown token
+   */
+  async receiveHeartbeat(token, { ok, message }) {
+    const heartbeat = this.heartbeats.get(token);
+    if (!heartbeat) return false;
+
+    this.history.recordBeat(heartbeat.ref, { at: Date.now(), ok, message });
+    this.log(`Heartbeat ${heartbeat.ref}: ${ok ? "ok" : `failed ${message}`}`);
+    await this.runCheck(heartbeat.channel, heartbeat.check);
+    return true;
   }
 
   /**

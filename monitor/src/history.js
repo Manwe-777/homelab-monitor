@@ -25,6 +25,19 @@ export class UptimeHistory {
     }
   }
 
+  /**
+   * The last run a job reported for a heartbeat check: { at, ok, message }
+   */
+  beat(ref) {
+    return this.data.beats?.[ref] || null;
+  }
+
+  recordBeat(ref, beat) {
+    (this.data.beats ||= {})[ref] = beat;
+    this.dirty = true;
+    this.save();
+  }
+
   record(ref, ok, ts = Date.now()) {
     const days = (this.data.checks[ref] ||= {});
     const day = (days[dayOf(ts)] ||= { up: 0, total: 0 });

@@ -46,6 +46,30 @@ channels:
       #   url: https://192.168.1.1
       #   insecure: true   # self-signed certificate
 
+      # Free space on the filesystem holding a path
+      - name: Root disk
+        type: disk
+        path: /
+        maxUsedPercent: 90   # default 90
+        # minFreeGb: 10
+        # marker: MOUNTED    # a file that must exist: catches an unmounted share
+
+      # A DNS server answers (and optionally with the right address)
+      # - name: Local DNS
+      #   type: dns
+      #   server: 192.0.2.10
+      #   name: glance.example.com
+      #   expect: 192.0.2.10
+
+  # Scheduled jobs report each run to a URL (`homelab-monitor heartbeats` shows
+  # them). A failed run alerts right away, a missing one once it's overdue.
+  # - name: Jobs
+  #   checks:
+  #     - name: Nightly backup
+  #       type: heartbeat
+  #       every: 1d    # how often it runs (30m, 6h, 1d, 7d...)
+  #       grace: 3h    # how late it may be (default 1h)
+
 # Public status page (on by default, `statusPage: false` turns it off).
 # Put it behind your reverse proxy, e.g. status.example.com -> http://127.0.0.1:3001
 statusPage:

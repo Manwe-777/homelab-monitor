@@ -59,6 +59,30 @@ node src/index.js test-alert   # send a test alert
 Its key, Web Push keys and uptime history are kept in `monitor/data/` (keep it,
 or you'll need to pair again).
 
+### Check types
+
+| Type | Checks | Fields |
+| --- | --- | --- |
+| `http` | a URL answers with an expected status | `url`, `expectStatus`, `contains`, `insecure` |
+| `tcp` | a port accepts connections | `host`, `port` |
+| `dns` | a DNS server resolves a name | `server`, `name`, `expect` |
+| `disk` | free space on the filesystem of a path | `path`, `maxUsedPercent`, `minFreeGb`, `marker` |
+| `heartbeat` | a scheduled job reported in time | `every`, `grace` |
+| `docker` | a container runs and is healthy (needs the Docker socket) | `container` |
+
+Every check also takes `interval`, `timeout` and `failuresBeforeAlert`.
+
+**Heartbeats:** `homelab-monitor heartbeats --base http://HOST:PORT` prints the
+URL of each heartbeat check and a line to add to the job's systemd service:
+
+```ini
+ExecStopPost=-/bin/sh -c 'curl -fsS -m 10 -o /dev/null "URL?status=$SERVICE_RESULT&exit=$EXIT_STATUS"'
+```
+
+systemd runs it when the job ends, successful or not, so a failed run alerts
+right away. The URL's token is derived from the monitor's key: nothing to store
+in the config.
+
 ### Docker
 
 ```bash
