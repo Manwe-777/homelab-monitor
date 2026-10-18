@@ -84,8 +84,7 @@ export function loadConfig(path) {
     return { id, name: channel.name || id, public: channel.public !== false, checks };
   });
 
-  const statusPage = raw.statusPage === false ? null : raw.statusPage;
-  if (!statusPage && channels.some((c) => c.checks.some((check) => check.type === "heartbeat"))) {
+  if (raw.statusPage === false && channels.some((c) => c.checks.some((check) => check.type === "heartbeat"))) {
     throw new Error("config: heartbeat checks are reported to the status page server, don't turn it off");
   }
 

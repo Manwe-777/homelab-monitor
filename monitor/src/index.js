@@ -66,13 +66,14 @@ The app must be signed in with the owner's key: ${npubEncode(config.owner)}`);
     if (heartbeats.length === 0) console.log("No heartbeat checks in the config.");
 
     console.log(`The tokens are in ${envFile}, written when the monitor starts.
-Add these to each job's systemd [Service] (--env-file: that file's path on the host):
+Add these to each job's systemd [Service] (--env-file: that file's path on the host).
+$$ is on purpose: the shell expands the variables, not systemd.
 `);
     for (const { channel, check } of heartbeats) {
       const variable = heartbeatVariable(checkRef(channel.id, check.id));
       console.log(`${check.name}
   EnvironmentFile=${envFile}
-  ExecStopPost=-/bin/sh -c 'curl -fsS -m 10 -o /dev/null "${base}/heartbeat/$${variable}?status=$SERVICE_RESULT&exit=$EXIT_STATUS"'
+  ExecStopPost=-/bin/sh -c 'curl -fsS -m 10 -o /dev/null "${base}/heartbeat/$$${variable}?status=$$SERVICE_RESULT&exit=$$EXIT_STATUS"'
 `);
     }
     break;

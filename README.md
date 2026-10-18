@@ -80,11 +80,12 @@ the lines to add to each job's systemd service:
 
 ```ini
 EnvironmentFile=/path/to/data/heartbeats.env
-ExecStopPost=-/bin/sh -c 'curl -fsS -m 10 -o /dev/null "http://HOST:PORT/heartbeat/$HEARTBEAT_JOBS_NIGHTLY_BACKUP?status=$SERVICE_RESULT&exit=$EXIT_STATUS"'
+ExecStopPost=-/bin/sh -c 'curl -fsS -m 10 -o /dev/null "http://HOST:PORT/heartbeat/$$HEARTBEAT_JOBS_NIGHTLY_BACKUP?status=$$SERVICE_RESULT&exit=$$EXIT_STATUS"'
 ```
 
 systemd runs it when the job ends, successful or not, so a failed run alerts
-right away. To rotate every heartbeat URL, delete `heartbeat.key` from the data
+right away. The `$$` matters: systemd turns it into `$` and leaves the
+variables to the shell, which has the job's real result. To rotate every heartbeat URL, delete `heartbeat.key` from the data
 directory and restart the monitor: the jobs read the new tokens on their next run.
 
 ## App

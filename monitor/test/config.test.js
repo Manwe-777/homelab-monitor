@@ -59,3 +59,11 @@ test("the example config loads, with every check type", () => {
   const types = new Set(config.channels.flatMap((c) => c.checks.map((check) => check.type)));
   for (const type of ["http", "tcp", "disk", "dns", "heartbeat"]) assert.ok(types.has(type), type);
 });
+
+test("heartbeats need the status page, which is on unless turned off", () => {
+  const heartbeat = `channels: [{ name: Jobs, checks: [{ name: Nightly, type: heartbeat, every: 1d }] }]`;
+  const config = configFrom(`owner: ${owner}\n${heartbeat}`);
+  assert.equal(config.statusPage.port, 3001);
+  assert.equal(config.channels[0].checks[0].everyMs, 86400000);
+  assert.throws(() => configFrom(`owner: ${owner}\nstatusPage: false\n${heartbeat}`), /status page/);
+});
