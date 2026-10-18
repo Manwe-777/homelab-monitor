@@ -97,7 +97,9 @@ npm run app        # dev server
 npm run build      # app/dist, static files to host anywhere
 ```
 
-Notifications need the app served over **HTTPS** (or `localhost`). On Android,
+The app is published to GitHub Pages on every push to `main`
+([`.github/workflows/pages.yml`](.github/workflows/pages.yml)). Notifications
+need it served over **HTTPS** (or `localhost`). On Android,
 open it in Chrome or Firefox, install it to the home screen, then:
 
 1. Create a key (or paste your nsec), and put the shown npub as the monitor's `owner`.
