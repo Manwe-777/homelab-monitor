@@ -3,9 +3,9 @@ import net from "node:net";
 
 /**
  * DNS check: a DNS server answers for a name.
- *   server: 192.0.2.10        (IP or host name of the DNS server)
+ *   server: 192.0.2.53         (IP or host name of the DNS server)
  *   domain: dashboard.example.com
- *   expect: 192.0.2.10        (optional: an address the answer must include)
+ *   expect: 192.0.2.10         (optional: an address the answer must include)
  *   port: 53                   (default)
  */
 export async function checkDns(check) {
