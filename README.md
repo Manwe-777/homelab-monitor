@@ -65,7 +65,7 @@ or you'll need to pair again).
 | --- | --- | --- |
 | `http` | a URL answers with an expected status | `url`, `expectStatus`, `contains`, `insecure` |
 | `tcp` | a port accepts connections | `host`, `port` |
-| `dns` | a DNS server resolves a name | `server`, `name`, `expect` |
+| `dns` | a DNS server resolves a domain | `server`, `domain`, `expect` |
 | `disk` | free space on the filesystem of a path | `path`, `maxUsedPercent`, `minFreeGb`, `marker` |
 | `heartbeat` | a scheduled job reported in time | `every`, `grace` |
 | `docker` | a container runs and is healthy (needs the Docker socket) | `container` |

@@ -58,14 +58,14 @@ test("dns check", async (t) => {
   t.after(() => server.close());
   const base = { type: "dns", server: "127.0.0.1", port: server.address().port, timeoutMs: 1000 };
 
-  const ok = await runCheck({ ...base, name: "dashboard.example.test", expect: "192.0.2.10" });
+  const ok = await runCheck({ ...base, domain: "dashboard.example.test", expect: "192.0.2.10" });
   assert.equal(ok.ok, true, ok.message);
   assert.match(ok.message, /dashboard\.example\.test → 192\.0\.2\.10/);
 
-  const wrong = await runCheck({ ...base, name: "dashboard.example.test", expect: "10.0.0.1" });
+  const wrong = await runCheck({ ...base, domain: "dashboard.example.test", expect: "10.0.0.1" });
   assert.match(wrong.message, /expected 10\.0\.0\.1/);
 
-  const missing = await runCheck({ ...base, name: "nope.example.test" });
+  const missing = await runCheck({ ...base, domain: "nope.example.test" });
   assert.deepEqual(missing, { ok: false, message: "nope.example.test: ENOTFOUND" });
 });
 

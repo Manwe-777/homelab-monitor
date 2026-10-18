@@ -4,7 +4,7 @@ import net from "node:net";
 /**
  * DNS check: a DNS server answers for a name.
  *   server: 192.0.2.10        (IP or host name of the DNS server)
- *   name: dashboard.example.com
+ *   domain: dashboard.example.com
  *   expect: 192.0.2.10        (optional: an address the answer must include)
  *   port: 53                   (default)
  */
@@ -15,12 +15,12 @@ export async function checkDns(check) {
 
   const started = Date.now();
   try {
-    const addresses = await resolver.resolve4(check.name);
+    const addresses = await resolver.resolve4(check.domain);
     if (check.expect && !addresses.includes(check.expect)) {
-      return { ok: false, message: `${check.name} resolved to ${addresses.join(", ")}, expected ${check.expect}` };
+      return { ok: false, message: `${check.domain} resolved to ${addresses.join(", ")}, expected ${check.expect}` };
     }
-    return { ok: true, message: `${check.name} → ${addresses[0]} in ${Date.now() - started} ms` };
+    return { ok: true, message: `${check.domain} → ${addresses[0]} in ${Date.now() - started} ms` };
   } catch (err) {
-    return { ok: false, message: `${check.name}: ${err.code || err.message}` };
+    return { ok: false, message: `${check.domain}: ${err.code || err.message}` };
   }
 }

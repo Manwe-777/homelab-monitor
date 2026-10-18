@@ -10,7 +10,7 @@ export const CHECK_TYPES = {
   tcp: { run: checkTcp, target: (c) => `${c.host}:${c.port}`, required: ["host", "port"] },
   docker: { run: checkDocker, target: (c) => c.container, required: ["container"] },
   disk: { run: checkDisk, target: (c) => c.path, required: ["path"] },
-  dns: { run: checkDns, target: (c) => `${c.name} @ ${c.server}`, required: ["server", "name"] },
+  dns: { run: checkDns, target: (c) => `${c.domain} @ ${c.server}`, required: ["server", "domain"] },
   heartbeat: { run: checkHeartbeat, target: (c) => `every ${c.every}`, required: ["every"] },
 };
 

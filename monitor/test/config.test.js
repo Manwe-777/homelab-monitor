@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateSecretKey, getPublicKey, npubEncode } from "tool-db";
@@ -50,4 +50,12 @@ test("rejects bad configs with a clear message", () => {
     () => configFrom(`owner: ${owner}\nchannels: [{ name: a, checks: [{ type: tcp, host: x }] }]`),
     /needs `port`/
   );
+});
+
+test("the example config loads, with every check type", () => {
+  const example = readFileSync(new URL("../config.example.yaml", import.meta.url), "utf8")
+    .replace("owner: npub1...", `owner: ${owner}`);
+  const config = configFrom(example);
+  const types = new Set(config.channels.flatMap((c) => c.checks.map((check) => check.type)));
+  for (const type of ["http", "tcp", "disk", "dns", "heartbeat"]) assert.ok(types.has(type), type);
 });
