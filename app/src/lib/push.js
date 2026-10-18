@@ -7,9 +7,25 @@ const scopeOf = (monitor) => new URL(`./m/${monitor.slice(0, 16)}/`, document.ba
 export const pushSupported = () =>
   "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 
+/**
+ * This monitor's registration, once its worker is active (push needs an
+ * active worker). Not `navigator.serviceWorker.ready`: that waits for a
+ * worker controlling this page, and ours are scoped to ./m/<monitor>/.
+ */
 async function registration(monitor) {
   const swUrl = new URL("./sw.js", document.baseURI).href;
-  return navigator.serviceWorker.register(swUrl, { scope: scopeOf(monitor) });
+  const reg = await navigator.serviceWorker.register(swUrl, { scope: scopeOf(monitor) });
+  const worker = reg.installing || reg.waiting || reg.active;
+
+  if (worker && worker.state !== "activated") {
+    await new Promise((resolve, reject) => {
+      worker.addEventListener("statechange", () => {
+        if (worker.state === "activated") resolve();
+        if (worker.state === "redundant") reject(new Error("The notifications worker failed to install"));
+      });
+    });
+  }
+  return reg;
 }
 
 function urlBase64ToUint8Array(base64) {
@@ -21,14 +37,21 @@ function urlBase64ToUint8Array(base64) {
  * Asks for permission (must come from a click) and subscribes to a monitor
  * @returns the subscription as JSON, to give to the monitor
  */
-export async function subscribe(monitor, vapidPublicKey) {
+export function subscribe(monitor, vapidPublicKey) {
+  return withTimeout(
+    subscribeNow(monitor, vapidPublicKey),
+    30000,
+    "Enabling notifications timed out, try again"
+  );
+}
+
+async function subscribeNow(monitor, vapidPublicKey) {
   if (!pushSupported()) throw new Error("This browser doesn't support push notifications");
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") throw new Error("Notifications are blocked for this site");
 
   const reg = await registration(monitor);
-  await navigator.serviceWorker.ready;
   const key = urlBase64ToUint8Array(vapidPublicKey);
 
   let subscription = await reg.pushManager.getSubscription();
@@ -37,11 +60,7 @@ export async function subscribe(monitor, vapidPublicKey) {
     await subscription.unsubscribe();
     subscription = null;
   }
-  subscription ||= await withTimeout(
-    reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }),
-    20000,
-    "Couldn't reach this browser's push service, try again later"
-  );
+  subscription ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
   return subscription.toJSON();
 }
 
