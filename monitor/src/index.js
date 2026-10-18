@@ -65,9 +65,13 @@ The app must be signed in with the owner's key: ${npubEncode(config.owner)}`);
     );
     if (heartbeats.length === 0) console.log("No heartbeat checks in the config.");
 
-    console.log(`The tokens are in ${envFile}, written when the monitor starts.
-Add these to each job's systemd [Service] (--env-file: that file's path on the host).
-$$ is on purpose: the shell expands the variables, not systemd.
+    // In Docker, the data dir is a mount: jobs on the host need its host path
+    const inContainer = !values["env-file"] && process.env.HOMELAB_MONITOR_DATA;
+    console.log(`The tokens are in ${envFile}, written when the monitor starts.${
+      inContainer ? `\n${envFile} is the container's path: use your data directory on the host (or pass --env-file).` : ""
+    }
+Add these to each job's systemd [Service]. $$ is on purpose: the shell expands
+the variables, not systemd. For cron and scripts, see Heartbeats in the README.
 `);
     for (const { channel, check } of heartbeats) {
       const variable = heartbeatVariable(checkRef(channel.id, check.id));
