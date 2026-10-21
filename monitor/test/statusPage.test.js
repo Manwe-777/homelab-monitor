@@ -127,3 +127,62 @@ test("jobs report runs to their heartbeat URL", async (t) => {
 
   assert.equal((await fetch(`${base}/heartbeat/${"0".repeat(32)}`)).status, 404);
 });
+
+test("services report events to their event URL", async (t) => {
+  const { eventToken } = await import("../src/checks/event.js");
+  const relay = new ToolDbRelay({ topic: "unused", port: 0, host: "127.0.0.1", acceptForeignEvents: true });
+  await relay.start();
+  const identity = loadIdentity(mkdtempSync(join(tmpdir(), "monitor-data-")));
+  const alerts = [];
+
+  const monitor = new Monitor(
+    {
+      name: "Lab",
+      owners: [getPublicKey(generateSecretKey())],
+      relays: [relay.url],
+      vapidSubject: "mailto:test@example.com",
+      heartbeatMs: 60000,
+      statusPage: { port: 0, host: "127.0.0.1", showTargets: false },
+      channels: [
+        {
+          id: "home",
+          name: "Home",
+          checks: [
+            { id: "camera", name: "Camera", type: "event", cooldownMs: 60000, intervalMs: 60000, timeoutMs: 1000, failuresBeforeAlert: 1 },
+          ],
+        },
+      ],
+    },
+    identity,
+    { log: () => {} }
+  );
+  monitor.sendAlert = async (channel, check, state, title, body, extra) => alerts.push({ state, title, body, ...extra });
+  t.after(async () => {
+    await monitor.stop();
+    await relay.close();
+  });
+  await monitor.start();
+  const base = `http://127.0.0.1:${monitor.statusServer.address().port}`;
+  const url = `${base}/event/${eventToken(identity.heartbeatKey, "home/camera")}`;
+  const post = (body) =>
+    fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body });
+
+  await sleep(200);
+  assert.equal(monitor.states["home/camera"].message, "No events yet");
+
+  const first = await post(JSON.stringify({ title: "Motion", message: "At 14:12", url: "http://cam.lan/#t=1" }));
+  assert.equal(first.status, 200);
+  assert.deepEqual(await first.json(), { sent: true });
+  assert.deepEqual(alerts, [{ state: "event", title: "Motion", body: "At 14:12", url: "http://cam.lan/#t=1" }]);
+
+  // Within the cooldown: counted, not sent
+  assert.deepEqual(await (await post(JSON.stringify({ title: "Motion" }))).json(), { sent: false });
+  assert.equal(alerts.length, 1);
+  assert.match(monitor.states["home/camera"].message, /^Last event .* ago: Motion, 1 more during cooldown$/);
+  assert.equal(monitor.states["home/camera"].state, "up");
+
+  assert.equal((await post("{not json")).status, 400);
+  assert.equal((await post(JSON.stringify({ url: "javascript:alert(1)" }))).status, 400);
+  assert.equal((await fetch(url)).status, 405);
+  assert.equal((await fetch(`${base}/event/${"0".repeat(32)}`, { method: "POST", body: "{}" })).status, 404);
+});

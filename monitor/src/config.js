@@ -80,12 +80,14 @@ export function loadConfig(path) {
 
       const heartbeat = check.type === "heartbeat";
       let durations = {};
-      if (heartbeat) {
-        try {
+      try {
+        if (heartbeat) {
           durations = { everyMs: parseDuration(check.every), graceMs: parseDuration(check.grace ?? "1h") };
-        } catch (err) {
-          throw new Error(`config: ${where}: ${err.message}`);
+        } else if (check.type === "event") {
+          durations = { cooldownMs: parseDuration(check.cooldown ?? "1m") };
         }
+      } catch (err) {
+        throw new Error(`config: ${where}: ${err.message}`);
       }
 
       return {
@@ -104,8 +106,9 @@ export function loadConfig(path) {
     return { id, name: channel.name || id, public: channel.public !== false, checks };
   });
 
-  if (raw.statusPage === false && channels.some((c) => c.checks.some((check) => check.type === "heartbeat"))) {
-    throw new Error("config: heartbeat checks are reported to the status page server, don't turn it off");
+  const reported = channels.flatMap((c) => c.checks).find((check) => ["heartbeat", "event"].includes(check.type));
+  if (raw.statusPage === false && reported) {
+    throw new Error(`config: ${reported.type} checks are reported to the status page server, don't turn it off`);
   }
 
   return {

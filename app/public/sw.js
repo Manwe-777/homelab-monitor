@@ -22,7 +22,8 @@ self.addEventListener("push", (event) => {
       icon: new URL("icon-192.png", appUrl).href,
       badge: new URL("badge-96.png", appUrl).href,
       timestamp: alert.ts,
-      data: { url: `${appUrl}?monitor=${alert.monitor || ""}&tab=history` },
+      // An event can link to what it's about (a camera's recording); alerts open the history
+      data: { url: alert.url || `${appUrl}?monitor=${alert.monitor || ""}&tab=history` },
     })
   );
 });
@@ -30,6 +31,12 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.url || appUrl;
+
+  // An event's own link opens in a new window, not inside the app
+  if (!url.startsWith(appUrl)) {
+    event.waitUntil(self.clients.openWindow(url));
+    return;
+  }
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {

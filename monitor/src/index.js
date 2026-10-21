@@ -9,6 +9,7 @@ import { loadIdentity } from "./identity.js";
 import { Monitor } from "./monitor.js";
 import { runCheck } from "./checks/index.js";
 import { heartbeatVariable } from "./checks/heartbeat.js";
+import { eventVariable } from "./checks/event.js";
 
 const USAGE = `Usage: homelab-monitor [command] [--config config.yaml] [--data ./data]
 
@@ -19,6 +20,8 @@ Commands:
   test-alert [channel] Send a test alert to a channel (the first one by default)
   heartbeats [--base URL] [--env-file PATH]
                        Show how each heartbeat check's job reports its runs
+  events [--base URL] [--env-file PATH]
+                       Show how services report to each event check
 `;
 
 const { values, positionals } = parseArgs({
@@ -84,11 +87,37 @@ the variables, not systemd. For cron and scripts, see Heartbeats in the README.
     break;
   }
 
+  case "events": {
+    const base = (values.base || `http://127.0.0.1:${config.statusPage?.port ?? 3001}`).replace(/\/$/, "");
+    const envFile = values["env-file"] || join(resolve(values.data), "events.env");
+    const events = config.channels.flatMap((channel) =>
+      channel.checks.filter((check) => check.type === "event").map((check) => ({ channel, check }))
+    );
+    if (events.length === 0) {
+      console.log("No event checks in the config.");
+      break;
+    }
+    const inContainer = !values["env-file"] && process.env.HOMELAB_MONITOR_DATA;
+    console.log(`The tokens are in ${envFile}, written when the monitor starts.${
+      inContainer ? `\n${envFile} is the container's path: use your data directory on the host (or pass --env-file).` : ""
+    }
+A service reports an event with a POST; title, message and url are optional.
+`);
+    for (const { channel, check } of events) {
+      const variable = eventVariable(checkRef(channel.id, check.id));
+      console.log(`${check.name}
+  . ${envFile}; curl -fsS -m 10 -H 'content-type: application/json' \\
+    -d '{"title":"...","message":"...","url":"https://..."}' "${base}/event/$${variable}"
+`);
+    }
+    break;
+  }
+
   case "check": {
     for (const channel of config.channels) {
       for (const check of channel.checks) {
-        if (check.type === "heartbeat") {
-          console.log(`---- ${checkRef(channel.id, check.id)}: heartbeats are only checked while running`);
+        if (check.type === "heartbeat" || check.type === "event") {
+          console.log(`---- ${checkRef(channel.id, check.id)}: ${check.type}s are only checked while running`);
           continue;
         }
         const result = await runCheck(check);
@@ -127,6 +156,7 @@ the variables, not systemd. For cron and scripts, see Heartbeats in the README.
     const monitor = new Monitor(config, identity, {
       historyPath: join(resolve(values.data), "history.json"),
       heartbeatsEnvPath: join(resolve(values.data), "heartbeats.env"),
+      eventsEnvPath: join(resolve(values.data), "events.env"),
     });
     const shutdown = async () => {
       await monitor.stop();

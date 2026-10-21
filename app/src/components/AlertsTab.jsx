@@ -74,6 +74,11 @@ function AlertsTab({ db, monitor, config }) {
                   <div className="alert__detail">
                     {[alert.body, channelName(alert.channel)].filter(Boolean).join(" · ")}
                   </div>
+                  {alert.url && /^https?:\/\//.test(alert.url) && (
+                    <a className="alert__link" href={alert.url} target="_blank" rel="noopener noreferrer">
+                      Open
+                    </a>
+                  )}
                 </div>
                 <time className="alert__time" dateTime={new Date(alert.ts).toISOString()}>
                   {formatTime(alert.ts)}

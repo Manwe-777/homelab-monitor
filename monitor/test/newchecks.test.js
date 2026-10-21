@@ -96,3 +96,22 @@ test("heartbeats.env holds a token per heartbeat check", async () => {
   assert.match(env, new RegExp(`^HEARTBEAT_BACKUPS_IMMICH_DATABASE_BACKUP=${heartbeatToken("k".repeat(64), "backups/immich-database-backup")}$`, "m"));
   assert.match(env, /^HEARTBEAT_JOBS_NIGHTLY=[0-9a-f]{32}$/m);
 });
+
+test("event tokens, env file and payloads", async () => {
+  const { eventToken, eventsEnv, eventVariable, parseEvent, checkEvent } = await import("../src/checks/event.js");
+  const key = "k".repeat(64);
+  assert.notEqual(eventToken(key, "home/camera"), heartbeatToken(key, "home/camera"));
+  assert.equal(eventVariable("home/front-camera"), "EVENT_HOME_FRONT_CAMERA");
+  assert.match(eventsEnv(key, ["home/front-camera"]), new RegExp(`^EVENT_HOME_FRONT_CAMERA=${eventToken(key, "home/front-camera")}$`, "m"));
+
+  assert.deepEqual(parseEvent({ title: " Motion ", url: "http://cam.lan/#t=1" }), { title: "Motion", url: "http://cam.lan/#t=1" });
+  assert.deepEqual(parseEvent({}), {});
+  assert.equal(parseEvent({ message: "x".repeat(900) }).message.length, 500);
+  assert.throws(() => parseEvent({ url: "javascript:alert(1)" }), /http or https/);
+  assert.throws(() => parseEvent({ title: 3 }), /must be a string/);
+  assert.throws(() => parseEvent([]), /JSON object/);
+
+  assert.deepEqual(checkEvent({}, {}), { ok: true, message: "No events yet" });
+  const last = { at: 0, title: "Motion", suppressed: 2 };
+  assert.equal(checkEvent({}, { last, now: 5 * 60000 }).message, "Last event 5 min ago: Motion, 2 more during cooldown");
+});

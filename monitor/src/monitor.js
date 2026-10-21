@@ -18,6 +18,7 @@ import { runCheck, CHECK_TYPES } from "./checks/index.js";
 import { UptimeHistory } from "./history.js";
 import { writeFileSync } from "node:fs";
 import { heartbeatToken, heartbeatsEnv } from "./checks/heartbeat.js";
+import { eventToken, eventsEnv, parseEvent } from "./checks/event.js";
 import { createStatusServer } from "./statusPage.js";
 
 const timestamp = () => new Date().toISOString().replace("T", " ").slice(0, 19);
@@ -34,18 +35,20 @@ export class Monitor {
    * @param identity from loadIdentity
    * @param options.historyPath where to keep the uptime history (in memory if not set)
    * @param options.heartbeatsEnvPath where to write the heartbeat tokens for jobs (not written if not set)
+   * @param options.eventsEnvPath where to write the event tokens for services (not written if not set)
    * @param options.toolDbOptions extra ToolDb options (tests)
    */
   constructor(
     config,
     identity,
-    { log = defaultLog, historyPath = null, heartbeatsEnvPath = null, toolDbOptions = {} } = {}
+    { log = defaultLog, historyPath = null, heartbeatsEnvPath = null, eventsEnvPath = null, toolDbOptions = {} } = {}
   ) {
     this.config = config;
     this.identity = identity;
     this.log = log;
     this.toolDbOptions = toolDbOptions;
     this.heartbeatsEnvPath = heartbeatsEnvPath;
+    this.eventsEnvPath = eventsEnvPath;
     this.history = new UptimeHistory(historyPath);
     this.startedAt = Date.now();
     this.lastCheckAt = 0;
@@ -56,6 +59,15 @@ export class Monitor {
       for (const check of channel.checks.filter((c) => c.type === "heartbeat")) {
         const ref = checkRef(channel.id, check.id);
         this.heartbeats.set(heartbeatToken(identity.heartbeatKey, ref), { channel, check, ref });
+      }
+    }
+
+    // Event checks, by the token in their URL
+    this.events = new Map();
+    for (const channel of config.channels) {
+      for (const check of channel.checks.filter((c) => c.type === "event")) {
+        const ref = checkRef(channel.id, check.id);
+        this.events.set(eventToken(identity.heartbeatKey, ref), { channel, check, ref });
       }
     }
 
@@ -113,6 +125,10 @@ export class Monitor {
     if (this.heartbeatsEnvPath) {
       const refs = [...this.heartbeats.values()].map((heartbeat) => heartbeat.ref);
       writeFileSync(this.heartbeatsEnvPath, heartbeatsEnv(this.identity.heartbeatKey, refs), { mode: 0o600 });
+    }
+    if (this.eventsEnvPath && this.events.size) {
+      const refs = [...this.events.values()].map((event) => event.ref);
+      writeFileSync(this.eventsEnvPath, eventsEnv(this.identity.heartbeatKey, refs), { mode: 0o600 });
     }
     if (this.config.statusPage) await this.startStatusPage();
     await this.connect();
@@ -262,7 +278,11 @@ export class Monitor {
 
   async evaluateCheck(channel, check, ref) {
     const context =
-      check.type === "heartbeat" ? { beat: this.history.beat(ref), waitingSince: this.startedAt } : undefined;
+      check.type === "heartbeat"
+        ? { beat: this.history.beat(ref), waitingSince: this.startedAt }
+        : check.type === "event"
+          ? { last: this.history.lastEvent(ref) }
+          : undefined;
     const result = await runCheck(check, context);
     const state = this.states[ref];
     const now = Date.now();
@@ -337,8 +357,9 @@ export class Monitor {
 
   /**
    * Records an alert in the history, and notifies the devices that want it
+   * @param extra more fields for the alert (an event's url)
    */
-  async sendAlert(channel, check, state, title, body) {
+  async sendAlert(channel, check, state, title, body, extra = {}) {
     const ts = Date.now();
     const alert = {
       id: `${ts}-${Math.random().toString(36).slice(2, 8)}`,
@@ -349,6 +370,7 @@ export class Monitor {
       title,
       body,
       ts,
+      ...extra,
     };
 
     try {
@@ -463,6 +485,41 @@ export class Monitor {
     this.log(`Heartbeat ${heartbeat.ref}: ${ok ? "ok" : `failed ${message}`}`);
     await this.runCheck(heartbeat.channel, heartbeat.check);
     return true;
+  }
+
+  /**
+   * A service reporting an event: alerts right away, unless the check's
+   * last alert was less than its cooldown ago
+   * @returns { found: false } for an unknown token, else { found, sent }
+   * @throws for an invalid event
+   */
+  async receiveEvent(token, input) {
+    const target = this.events.get(token);
+    if (!target) return { found: false };
+    const { channel, check, ref } = target;
+    const event = parseEvent(input);
+    const now = Date.now();
+    const last = this.history.lastEvent(ref);
+
+    if (last && now - last.at < check.cooldownMs) {
+      this.history.recordEvent(ref, { ...last, suppressed: (last.suppressed || 0) + 1 });
+      this.log(`Event ${ref}: in cooldown, not sent`);
+      await this.runCheck(channel, check);
+      return { found: true, sent: false };
+    }
+
+    this.history.recordEvent(ref, { at: now, title: event.title || "", suppressed: 0 });
+    this.log(`Event ${ref}: ${event.title || "(no title)"}`);
+    await this.sendAlert(
+      channel,
+      check,
+      "event",
+      event.title || `🔔 ${check.name}`,
+      event.message || "",
+      event.url ? { url: event.url } : {}
+    );
+    await this.runCheck(channel, check);
+    return { found: true, sent: true };
   }
 
   /**

@@ -1,13 +1,13 @@
 :root {
   --bg: #f6f8fa; --surface: #ffffff; --fg: #1f2328; --muted: #59636e; --border: #d1d9e0;
-  --accent: #1a7f37; --accent-fg: #ffffff; --ok: #1a7f37; --bad: #cf222e; --warn: #9a6700; --none: #8c959f;
+  --accent: #1a7f37; --accent-fg: #ffffff; --ok: #1a7f37; --bad: #cf222e; --warn: #9a6700; --info: #0969da; --none: #8c959f;
   --bad-bg: #ffebe9; --notice-bg: #ddf4ff;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0d1117; --surface: #151b23; --fg: #e6edf3; --muted: #9198a1; --border: #3d444d;
-    --accent: #238636; --accent-fg: #ffffff; --ok: #3fb950; --bad: #f85149; --warn: #d29922; --none: #656c76;
+    --accent: #238636; --accent-fg: #ffffff; --ok: #3fb950; --bad: #f85149; --warn: #d29922; --info: #4493f8; --none: #656c76;
     --bad-bg: #2d1117; --notice-bg: #121d2f;
     color-scheme: dark;
   }
@@ -64,6 +64,8 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--accent); ou
 .dot--up { background: var(--ok); }
 .dot--down { background: var(--bad); }
 .dot--test { background: var(--warn); }
+.dot--event { background: var(--info); }
+.alert__link { font-size: 0.8rem; color: var(--info); }
 
 .channel__header { display: flex; align-items: center; justify-content: space-between; margin: -4px -4px 4px 0; }
 .channel__header h2 { margin: 0; }

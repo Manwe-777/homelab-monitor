@@ -73,6 +73,17 @@ channels:
         every: 1d    # how often it runs (30m, 6h, 1d, 7d...)
         grace: 3h    # how late it may be (default 1h)
 
+  # Services report events to a URL (`homelab-monitor events` shows them),
+  # and each one is pushed as it happens. A channel of their own lets each
+  # device choose whether it wants them; `public: false` keeps them off the
+  # status page.
+  - name: Home
+    public: false
+    checks:
+      - name: Camera
+        type: event
+        cooldown: 5m   # at most one alert this often (default 1m)
+
 # Public status page (on by default, `statusPage: false` turns it off).
 # Put it behind your reverse proxy, e.g. status.example.com -> http://THIS-MACHINE:3001
 statusPage:

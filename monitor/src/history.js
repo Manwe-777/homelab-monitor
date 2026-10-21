@@ -38,6 +38,18 @@ export class UptimeHistory {
     this.save();
   }
 
+  /**
+   * The last event a service reported for an event check: { at, title, suppressed }
+   */
+  lastEvent(ref) {
+    return this.data.events?.[ref] || null;
+  }
+
+  recordEvent(ref, event) {
+    (this.data.events ||= {})[ref] = event;
+    this.dirty = true;
+  }
+
   record(ref, ok, ts = Date.now()) {
     const days = (this.data.checks[ref] ||= {});
     const day = (days[dayOf(ts)] ||= { up: 0, total: 0 });

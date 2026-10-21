@@ -57,7 +57,7 @@ test("the example config loads, with every check type", () => {
     .replace("owner: npub1...", `owner: ${owner}`);
   const config = configFrom(example);
   const types = new Set(config.channels.flatMap((c) => c.checks.map((check) => check.type)));
-  for (const type of ["http", "tcp", "disk", "dns", "heartbeat"]) assert.ok(types.has(type), type);
+  for (const type of ["http", "tcp", "disk", "dns", "heartbeat", "event"]) assert.ok(types.has(type), type);
 });
 
 test("heartbeats need the status page, which is on unless turned off", () => {
@@ -66,6 +66,14 @@ test("heartbeats need the status page, which is on unless turned off", () => {
   assert.equal(config.statusPage.port, 3001);
   assert.equal(config.channels[0].checks[0].everyMs, 86400000);
   assert.throws(() => configFrom(`owner: ${owner}\nstatusPage: false\n${heartbeat}`), /status page/);
+});
+
+test("event checks take a cooldown, and need the status page too", () => {
+  const event = (extra = "") => `channels: [{ name: Home, checks: [{ name: Camera, type: event${extra} }] }]`;
+  assert.equal(configFrom(`owner: ${owner}\n${event()}`).channels[0].checks[0].cooldownMs, 60000);
+  assert.equal(configFrom(`owner: ${owner}\n${event(", cooldown: 5m")}`).channels[0].checks[0].cooldownMs, 300000);
+  assert.throws(() => configFrom(`owner: ${owner}\n${event(", cooldown: soon")}`), /isn't a duration/);
+  assert.throws(() => configFrom(`owner: ${owner}\nstatusPage: false\n${event()}`), /event checks .* status page/);
 });
 
 test("owner takes one npub or a list, up to 3", () => {

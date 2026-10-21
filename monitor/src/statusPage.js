@@ -272,6 +272,24 @@ footer { margin-top: 32px; color: var(--muted); font-size: 0.8rem; text-align: c
 </html>`;
 }
 
+const MAX_EVENT_BYTES = 8192;
+
+function readBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(Object.assign(new Error(`Body over ${limit} bytes`), { status: 413 }));
+        req.destroy();
+      } else chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
 /**
  * Serves the status page, its data as JSON, and a health endpoint for
  * external monitors (Glance, uptime checkers):
@@ -279,6 +297,7 @@ footer { margin-top: 32px; color: var(--muted); font-size: 0.8rem; text-align: c
  *   GET /api/status   the same data as JSON
  *   GET /health       200 when checks run and relays are connected, 503 otherwise
  *   /heartbeat/TOKEN  a job reporting a run (?status=success, or systemd's result)
+ *   POST /event/TOKEN a service reporting an event: JSON { title, message, url }
  */
 export function createStatusServer(monitor) {
   return http.createServer((req, res) => {
@@ -299,6 +318,21 @@ export function createStatusServer(monitor) {
       monitor
         .receiveHeartbeat(heartbeat[1], { ok, message })
         .then((found) => send(found ? 200 : 404, "text/plain", found ? "ok\n" : "Unknown heartbeat\n"));
+      return;
+    }
+
+    const event = path.match(/^\/event\/([0-9a-f]+)$/);
+    if (event) {
+      if (req.method !== "POST") return send(405, "text/plain", "POST a JSON object: { title, message, url }\n");
+      readBody(req, MAX_EVENT_BYTES)
+        .then((body) => monitor.receiveEvent(event[1], body ? JSON.parse(body) : {}))
+        .then(
+          (result) =>
+            result.found
+              ? send(200, "application/json", JSON.stringify({ sent: result.sent }))
+              : send(404, "text/plain", "Unknown event\n"),
+          (err) => send(err.status || 400, "text/plain", `${err instanceof SyntaxError ? "Invalid JSON" : err.message}\n`)
+        );
       return;
     }
 

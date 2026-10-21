@@ -4,6 +4,7 @@ import { checkDocker } from "./docker.js";
 import { checkDisk } from "./disk.js";
 import { checkDns } from "./dns.js";
 import { checkHeartbeat } from "./heartbeat.js";
+import { checkEvent } from "./event.js";
 
 export const CHECK_TYPES = {
   http: { run: checkHttp, target: (c) => c.url, required: ["url"] },
@@ -12,12 +13,13 @@ export const CHECK_TYPES = {
   disk: { run: checkDisk, target: (c) => c.path, required: ["path"] },
   dns: { run: checkDns, target: (c) => `${c.domain} @ ${c.server}`, required: ["server", "domain"] },
   heartbeat: { run: checkHeartbeat, target: (c) => `every ${c.every}`, required: ["every"] },
+  event: { run: checkEvent, target: (c) => `cooldown ${c.cooldown ?? "1m"}`, required: [] },
 };
 
 /**
  * Runs a check, never throws, and gives up after its timeout even if the
  * check itself doesn't (a hung network share can block a disk check)
- * @param context what some checks need from the monitor (heartbeats)
+ * @param context what some checks need from the monitor (heartbeats, events)
  * @returns {Promise<{ ok: boolean, message: string, pending?: boolean }>}
  */
 export async function runCheck(check, context) {

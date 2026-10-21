@@ -128,6 +128,7 @@ copy, so the pairing QR code opens it.
 | `dns` | a DNS server resolves a domain | `server`, `domain`, `expect` |
 | `disk` | free space on the filesystem of a path | `path`, `maxUsedPercent`, `minFreeGb`, `marker` |
 | `heartbeat` | a scheduled job reported in time | `every`, `grace` |
+| `event` | a service reports something as it happens | `cooldown` |
 | `docker` | a container runs and is healthy | `container` |
 
 Every check also takes `interval`, `timeout` and `failuresBeforeAlert`, and
@@ -178,6 +179,37 @@ A failed run alerts right away, a missing one once it's overdue. The job must
 be able to read `heartbeats.env` (it's `0600`, owned by uid 1000). To rotate
 every token, delete `data/heartbeat.key` and restart the monitor.
 
+### Events
+
+An event check pushes whatever a service reports, as it happens: a camera
+seeing motion, a door opening, a build finishing. It has no up or down
+state, only when the last event came:
+
+```yaml
+  - name: Home
+    public: false    # keep it off the status page
+    checks:
+      - name: Camera
+        type: event
+        cooldown: 5m   # at most one alert this often (default 1m)
+```
+
+The service POSTs JSON to a secret URL, with every field optional:
+
+```bash
+. /path/to/homelab-monitor/data/events.env
+curl -fsS -m 10 -H 'content-type: application/json' \
+  -d '{"title":"Motion detected","message":"Front door at 14:12","url":"https://cam.example.com/#t=1792606349"}' \
+  "http://127.0.0.1:3001/event/$EVENT_HOME_CAMERA"
+```
+
+It answers `{"sent": true}`, or `{"sent": false}` inside the cooldown, where
+events are counted rather than pushed. `url` must be `http` or `https`:
+tapping the notification opens it, and the alert history links to it. The
+monitor writes the tokens to `data/events.env` when it starts;
+`homelab-monitor events` lists them. They are derived from
+`data/heartbeat.key`, so deleting it rotates these too.
+
 ### Commands
 
 `docker compose exec monitor homelab-monitor <command>`:
@@ -189,6 +221,7 @@ every token, delete `data/heartbeat.key` and restart the monitor.
 | `pair` | shows the QR code and npub to pair the app |
 | `test-alert [channel]` | sends a test alert |
 | `heartbeats [--base URL] [--env-file PATH]` | shows how jobs report to heartbeat checks |
+| `events [--base URL] [--env-file PATH]` | shows how services report to event checks |
 
 ### How it works
 
